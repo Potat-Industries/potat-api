@@ -1,4 +1,4 @@
-package potat
+package common
 
 import "time"
 

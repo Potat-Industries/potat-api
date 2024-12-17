@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	potat "potat-api/api/types"
+	"potat-api/api/common"
 	"potat-api/api/utils"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -62,7 +62,7 @@ func (db *DB) Ping(ctx context.Context) error {
 	return db.Pool.Ping(ctx)
 }
 
-func (db *DB) GetUserByName(ctx context.Context, username string) (*potat.User, error) {
+func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User, error) {
 	query := `
 		SELECT
 				users.user_id,
@@ -79,7 +79,7 @@ func (db *DB) GetUserByName(ctx context.Context, username string) (*potat.User, 
 		GROUP BY users.user_id;
 	`
 
-	var user potat.User
+	var user common.User
 	err := db.Pool.QueryRow(ctx, query, username).Scan(
 		&user.ID,
 		&user.Username,
@@ -96,7 +96,7 @@ func (db *DB) GetUserByName(ctx context.Context, username string) (*potat.User, 
 	return &user, nil
 }
 
-func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*potat.User, error) {
+func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*common.User, error) {
 	query := `
 		SELECT
 			users.user_id,
@@ -111,7 +111,7 @@ func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*potat.User, err
 		WHERE user_id = $1
 	`
 
-	var user potat.User
+	var user common.User
 	err := db.Pool.QueryRow(ctx, query, id).Scan(
 		&user.ID,
 		&user.Username,
@@ -128,7 +128,7 @@ func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*potat.User, err
 	return &user, nil
 }
 
-func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) (*[]potat.Block) {
+func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) (*[]common.Block) {
 	query := `
 		SELECT
 		  user_id
@@ -147,9 +147,9 @@ func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) (*[]potat.
 
 	defer rows.Close()
 
-	var blocks []potat.Block
+	var blocks []common.Block
 	for rows.Next() {
-		var block potat.Block
+		var block common.Block
 		err := rows.Scan(
 			&block.ID,
 			&block.BlockedUserID,
@@ -167,7 +167,7 @@ func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) (*[]potat.
 	return &blocks
 }
 
-func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]potat.ChannelCommand {
+func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]common.ChannelCommand {
 	query := `
 		SELECT
 			command_id,
@@ -203,9 +203,9 @@ func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]potat
 
 	defer rows.Close()
 
-	var commands []potat.ChannelCommand
+	var commands []common.ChannelCommand
 	for rows.Next() {
-		var command potat.ChannelCommand
+		var command common.ChannelCommand
 		err := rows.Scan(
 			&command.CommandID,
 			&command.UserID,
@@ -240,7 +240,7 @@ func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]potat
 	return &commands
 }
 
-func (db *DB) GetChannelByName(ctx context.Context, username string) (*potat.Channel, error) {
+func (db *DB) GetChannelByName(ctx context.Context, username string) (*common.Channel, error) {
 	query := `
 	  SELECT
 		  c.channel_id,
@@ -257,7 +257,7 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*potat.Cha
 		WHERE username = $1;
 	`
 
-	var channel potat.Channel
+	var channel common.Channel
 	err := db.Pool.QueryRow(ctx, query, username).Scan(
 		&channel.ChannelID,
 		&channel.Username,
@@ -278,7 +278,7 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*potat.Cha
 
 	wg.Add(2)
 	
-	var commands *[]potat.ChannelCommand
+	var commands *[]common.ChannelCommand
 	go func() {
 		defer wg.Done()
 		cmds := db.GetChannelCommands(ctx, channel.ChannelID)
@@ -288,7 +288,7 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*potat.Cha
 	}()
 	
 	
-	var blocks []potat.Block
+	var blocks []common.Block
 	go func() {
 		defer wg.Done()
 		bs := db.GetChannelBlocks(ctx, channel.ChannelID)
@@ -302,30 +302,30 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*potat.Cha
 	if commands != nil {
 		channel.Commands = commands
 	} else {
-		channel.Commands = &[]potat.ChannelCommand{}
+		channel.Commands = &[]common.ChannelCommand{}
 	}
 	
 	if len(blocks) > 0 {
-		channel.Blocks = potat.FilteredBlocks{
-			Users:    &[]potat.Block{},
-			Commands: &[]potat.Block{},
+		channel.Blocks = common.FilteredBlocks{
+			Users:    &[]common.Block{},
+			Commands: &[]common.Block{},
 		}
 	
 		for _, block := range blocks {
-			if block.BlockType == potat.UserBlock {
+			if block.BlockType == common.UserBlock {
 				*channel.Blocks.Users = append(*channel.Blocks.Users, block)
-			} else if block.BlockType == potat.CommandBlock {
+			} else if block.BlockType == common.CommandBlock {
 				*channel.Blocks.Commands = append(*channel.Blocks.Commands, block)
 			}
 		}
 	} else {
-		channel.Blocks = potat.FilteredBlocks{}
+		channel.Blocks = common.FilteredBlocks{}
 	}
 	
 	return &channel, nil
 }
 
-func (db *DB) GetPotatoData(ctx context.Context, username string) (*potat.PotatoData, error) {
+func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.PotatoData, error) {
 	query := `
 		SELECT 
 			p.user_id,
@@ -368,7 +368,7 @@ func (db *DB) GetPotatoData(ctx context.Context, username string) (*potat.Potato
 		INNER JOIN potato_settings s ON u.user_id = s.user_id;
 	`
 
-	var data potat.PotatoData
+	var data common.PotatoData
 
 	err := db.Pool.QueryRow(context.Background(), query, username).Scan(
 		&data.ID,

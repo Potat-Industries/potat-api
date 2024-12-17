@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"potat-api/api"
 	"potat-api/api/db"
-	"potat-api/api/types"
+	"potat-api/api/common"
 	"potat-api/api/utils"
 	"strings"
 	"sync"
@@ -99,8 +99,8 @@ type UsersResponse struct {
 }
 
 type UserInfo struct {
-	User     *potat.User       `json:"user"`
-	Channel  *potat.Channel    `json:"channel"`
+	User     *common.User       `json:"user"`
+	Channel  *common.Channel    `json:"channel"`
 	Potatoes *PotatoInfo       `json:"potatoes"`
 }
 
@@ -130,7 +130,7 @@ func getQuizReady(lastQuiz int) bool {
 }
 
 func tidyPotatoInfo(
-	data *potat.PotatoData,
+	data *common.PotatoData,
 	lastPotato,
 	lastCDR,
 	lastTrample,
@@ -204,9 +204,9 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	var wg sync.WaitGroup
 
 	wg.Add(9)
-	var userData *potat.User
-	var channelData *potat.Channel
-	var potatData *potat.PotatoData
+	var userData *common.User
+	var channelData *common.Channel
+	var potatData *common.PotatoData
 	var lastPotato int
 	var lastCDR int
 	var lastTrample int
