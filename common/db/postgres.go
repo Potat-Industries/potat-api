@@ -523,7 +523,7 @@ func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
 		WHERE key = $1
 		RETURNING convert_from(zstd_decompress(content::bytea), 'utf-8') AS text;
 	`
-	
+
 	var text string
 
 	err := Postgres.Pool.QueryRow(ctx, query, encode(key)).Scan(&text)
@@ -542,7 +542,7 @@ func (db *DB) NewHaste(
 ) error {
 	query := `
 		INSERT INTO haste (key, content, source)
-		VALUES ($1, zstd_compress($2, null, 3), $3)
+		VALUES ($1, zstd_compress($2, null, 8), $3)
 		ON CONFLICT (key) DO NOTHING;
 	`
 

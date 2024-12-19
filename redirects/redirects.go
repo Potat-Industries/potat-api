@@ -49,9 +49,42 @@ func Stop() {
 	}
 }
 
+func setRedis(ctx context.Context, key, data string) error {
+	err := db.Redis.Set(ctx, key, data, 0).Err()
+	if err != nil {
+		return err
+	}
+
+	err = db.Redis.Expire(ctx, key, time.Hour).Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getRedis(ctx context.Context, key string) (string, error) {
+	data, err := db.Redis.Get(ctx, key).Result()
+	if err != nil {
+		return "", err
+	}
+
+	return data, nil
+}
+
 func getRedirect(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	key := vars["id"]
+	if key == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	cache, err := getRedis(r.Context(), key)
+	if err == nil && cache != "" {
+		http.Redirect(w, r, cache, http.StatusSeeOther)
+		return
+	}
 
 	redirect, err := db.Postgres.GetRedirectByKey(r.Context(), key)
 	if err != nil {
@@ -67,6 +100,11 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 
 	if !strings.HasPrefix(redirect, "http://") && !strings.HasPrefix(redirect, "https://") {
 		redirect = "https://" + redirect
+	}
+
+	err = setRedis(r.Context(), key, redirect)
+	if err != nil {
+		utils.Error.Printf("Error caching redirect: %v", err)
 	}
 
 	http.Redirect(w, r, redirect, http.StatusSeeOther)

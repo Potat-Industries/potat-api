@@ -89,8 +89,45 @@ func Stop() {
 	}
 }
 
+func getRedis(ctx context.Context, key string) (string, error) {
+	data, err := db.Redis.Get(ctx, key).Result()
+	if err != nil {
+		return "", err
+	}
+
+	return data, nil
+}
+
+func setRedis(ctx context.Context, key, data string) error {
+	err := db.Redis.Set(ctx, key, data, 0).Err()
+	if err != nil {
+		return err
+	}
+
+	err = db.Redis.Expire(ctx, key, time.Hour).Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func handleGet(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["id"]
+	if key == "" {
+		http.Error(w, "Key not provided", http.StatusBadRequest)
+		return
+	}
+
+	cache, err := getRedis(r.Context(), key)
+	if cache != "" && err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Cache-Hit", "true")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"key": key, "data": cache})
+		return
+	}
+
 	data, err := db.Postgres.GetHaste(r.Context(), key)
 	if err != nil || data == "" {
 		utils.Warn.Printf("Failed to get document: %v", err)
@@ -98,22 +135,47 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = setRedis(r.Context(), key, data)
+	if err != nil {
+		utils.Warn.Printf("Failed to cache document: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Cache-Hit", "false")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"key": key, "data": data})
 }
 
 func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["id"]
-	data, err := db.Postgres.GetHaste(r.Context(), key)
+	if key == "" {
+		http.Error(w, "Key not provided", http.StatusBadRequest)
+		return
+	}
 
+	cache, err := getRedis(r.Context(), key)
+	if cache != "" && err == nil {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("X-Cache-Hit", "true")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(cache))
+		return
+	}
+
+	data, err := db.Postgres.GetHaste(r.Context(), key)
 	if err != nil || data == "" {
 		utils.Warn.Printf("Failed to get document: %v", err)
 		http.Error(w, "Document not found", http.StatusNotFound)
 		return
 	}
 
+	err = setRedis(r.Context(), key, data)
+	if err != nil {
+		utils.Warn.Printf("Failed to cache document: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Cache-Hit", "false")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(data))
 }
