@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"potat-api/api/middleware"
@@ -24,6 +25,9 @@ var (
 )
 
 func init() {
+	staticPath := loadStaticFilePath()
+	staticFiles := loadStaticFiles(staticPath)
+
 	router = mux.NewRouter()
 
 	router.Use(middleware.LogRequest)
@@ -32,36 +36,17 @@ func init() {
 	router.HandleFunc("/raw/{id}", handleGetRaw).Methods(http.MethodGet)
 	router.HandleFunc("/documents", handlePost).Methods(http.MethodPost)
 	router.HandleFunc("/documents/{id}", handleGet).Methods(http.MethodGet)
-
-	pwd, err := os.Getwd()
-	if err != nil {
-		utils.Error.Panic("Failed loading Haste static file path: ", err)
-	}
-
-	staticPath := filepath.Join(pwd, "./haste/static")
-
-	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    if r.URL.Path == "/" {
-			http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
-			return
-		}
-
-		fileName := filepath.Join(staticPath, r.URL.Path)
-
-		_, err := os.Stat(fileName)
-		if os.IsNotExist(err) || err != nil {
+	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {	
+		if _, exists := staticFiles[r.URL.Path]; !exists { 
 			r.URL.Path = "/"
-			http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
-			return
 		}
-
-		http.ServeFile(w, r, fileName)
+		http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
 	}).Methods(http.MethodGet)
 }
 
 func StartServing(config common.Config) error {
 	if config.Haste.Host == "" || config.Haste.Port == "" {
-		utils.Error.Fatal("Config: Redirect host and port must be set")
+		utils.Error.Fatal("Config: Haste host and port must be set")
 	}
 	
 	if config.Haste.KeyLength != 0 {
@@ -112,6 +97,37 @@ func setRedis(ctx context.Context, key, data string) error {
 	return nil
 }
 
+func loadStaticFilePath() string {
+	pwd, err := os.Getwd()
+	if err != nil {
+		utils.Error.Panic("Failed loading Haste static file path: ", err)
+	}
+
+	return filepath.Join(pwd, "./haste/static")
+}
+
+func loadStaticFiles(staticPath string) map[string]bool {
+	files := make(map[string]bool)
+
+	err := filepath.Walk(staticPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			relativePath := strings.TrimPrefix(path, staticPath)
+			files[relativePath] = true
+		}
+		return nil
+	})
+
+	if err != nil {
+		utils.Error.Fatalf("Failed to load static files: %v", err)
+	}
+
+	return files
+}
+
 func handleGet(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["id"]
 	if key == "" {
@@ -122,7 +138,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	cache, err := getRedis(r.Context(), key)
 	if cache != "" && err == nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache-Hit", "true")
+		w.Header().Set("X-Cache-Hit", "HIT")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"key": key, "data": cache})
 		return
@@ -141,7 +157,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Cache-Hit", "false")
+	w.Header().Set("X-Cache-Hit", "MISS")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"key": key, "data": data})
 }
@@ -156,7 +172,7 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 	cache, err := getRedis(r.Context(), key)
 	if cache != "" && err == nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("X-Cache-Hit", "true")
+		w.Header().Set("X-Cache-Hit", "HIT")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(cache))
 		return
@@ -175,7 +191,7 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("X-Cache-Hit", "false")
+	w.Header().Set("X-Cache-Hit", "MISS")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(data))
 }

@@ -82,6 +82,7 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 
 	cache, err := getRedis(r.Context(), key)
 	if err == nil && cache != "" {
+		r.Header.Set("X-Cache-Hit", "HIT")
 		http.Redirect(w, r, cache, http.StatusSeeOther)
 		return
 	}
@@ -107,5 +108,6 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 		utils.Error.Printf("Error caching redirect: %v", err)
 	}
 
+	r.Header.Set("X-Cache-Hit", "MISS")
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }

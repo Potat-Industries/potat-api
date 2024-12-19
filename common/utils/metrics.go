@@ -13,7 +13,7 @@ var (
 	httpRequestCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "http_inbound_requests",
 		Help: "Inbound requests to bot endpoints",
-	}, []string{"host", "endpoint", "ip", "method", "status"})
+	}, []string{"host", "endpoint", "ip", "method", "status", "cachehit"})
 )
 
 func ObserveMetrics(config common.Config) error {
@@ -31,12 +31,13 @@ func ObserveMetrics(config common.Config) error {
 	return http.ListenAndServe(connString, nil);
 }
 
-func ObserveInboundRequests(host, endpoint, ip, method, status string) {
+func ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string) {
 	httpRequestCounter.WithLabelValues(
 		host,
 		endpoint,
 		ip,
 		method,
 		status,
+		cachehit,
 	).Inc()
 }
