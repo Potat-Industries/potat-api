@@ -41,8 +41,21 @@ func init() {
 	staticPath := filepath.Join(pwd, "./haste/static")
 
 	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = "/"
-		http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
+    if r.URL.Path == "/" {
+			http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
+			return
+		}
+
+		fileName := filepath.Join(staticPath, r.URL.Path)
+
+		_, err := os.Stat(fileName)
+		if os.IsNotExist(err) || err != nil {
+			r.URL.Path = "/"
+			http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
+			return
+		}
+
+		http.ServeFile(w, r, fileName)
 	}).Methods(http.MethodGet)
 }
 
