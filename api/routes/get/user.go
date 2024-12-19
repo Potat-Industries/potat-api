@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"potat-api/api"
-	"potat-api/api/db"
-	"potat-api/api/common"
-	"potat-api/api/utils"
+	"potat-api/common"
+	"potat-api/common/db"
+	"potat-api/common/utils"
 	"strings"
 	"sync"
 	"time"
@@ -137,7 +137,7 @@ func tidyPotatoInfo(
 	lastSteal,
 	lastEat,
 	lastQuiz int,
-	) *PotatoInfo {
+) *PotatoInfo {
 	if data == nil {
 		return nil
 	}
@@ -217,7 +217,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Postgres.GetUserByName(ctx, user)
-		if err != nil {
+		if err != nil && err != db.PostgresNoRows {
 			utils.Warn.Println("Error fetching user data: ", err)
 		} else {
 			userData = data
@@ -227,7 +227,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Postgres.GetChannelByName(ctx, user)
-		if err != nil {
+		if err != nil && err != db.PostgresNoRows {
 			utils.Warn.Println("Error fetching channel data: ", err)
 		} else {
 			channelData = data
@@ -237,7 +237,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Postgres.GetPotatoData(ctx, user)
-		if err != nil {
+		if err != nil && err != db.PostgresNoRows {
 			utils.Warn.Println("Error fetching potato data: ", err)
 		} else {
 			potatData = data
@@ -247,7 +247,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("potato:%s", user)).Int()
-		if err != nil {
+		if err != nil && err != db.RedisErrNil {
 			utils.Warn.Println("Error fetching last potato: ", err)
 		} else {
 			lastPotato = data
@@ -257,7 +257,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("cdr:%s", user)).Int()
-		if err != nil {
+		if err != nil && err != db.RedisErrNil {
 			utils.Warn.Println("Error fetching last cdr: ", err)
 		} else {
 			lastCDR = data
@@ -267,7 +267,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("trample:%s", user)).Int()
-		if err != nil {
+		if err != nil && err != db.RedisErrNil {
 			utils.Warn.Println("Error fetching last trample: ", err)
 		} else {
 			lastTrample = data
@@ -277,7 +277,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("steal:%s", user)).Int()
-		if err != nil {
+		if err != nil && err != db.RedisErrNil {
 			utils.Warn.Println("Error fetching last steal: ", err)
 		} else {
 			lastSteal = data
@@ -287,7 +287,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("eat:%s", user)).Int()
-		if err != nil {
+		if err != nil && err != db.RedisErrNil {
 			utils.Warn.Println("Error fetching last eat: ", err)
 		} else {
 			lastEat = data
@@ -297,7 +297,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("quiz:%s", user)).Int()
-		if err != nil {
+		if err != nil && err != db.RedisErrNil {
 			utils.Warn.Println("Error fetching last quiz: ", err)
 		} else {
 			lastQuiz = data
@@ -306,18 +306,20 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	wg.Wait()
 
+	potatoes := tidyPotatoInfo(
+		potatData, 
+		lastPotato,
+		lastCDR,
+		lastTrample,
+		lastSteal,
+		lastEat,
+		lastQuiz,
+	)
+
 	return UserInfo{
 		User: userData,
 		Channel: channelData,
-		Potatoes: tidyPotatoInfo(
-			potatData, 
-			lastPotato,
-			lastCDR,
-			lastTrample,
-			lastSteal,
-			lastEat,
-			lastQuiz,
-		),
+		Potatoes: potatoes,
 	}
 }
 
@@ -356,18 +358,18 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	var dataArray []UserInfo
 	var wg sync.WaitGroup
 
+	wg.Add(len(userArray))
 	for _, user := range userArray {
-			wg.Add(1)
-			go func(user string) {
-					defer wg.Done()
-					userData := loadUser(r.Context(), user)
-					dataChan <- userData
-			}(user)
+		go func() {	
+			defer wg.Done()
+			info := loadUser(r.Context(), user)
+			dataChan <- info
+		}()
 	}
 
 	go func() {
-			wg.Wait()
-			close(dataChan)
+		wg.Wait()
+		close(dataChan)
 	}()
 
 	for userData := range dataChan {

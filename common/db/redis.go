@@ -2,16 +2,17 @@ package db
 
 import (
 	"context"
-	"potat-api/api/utils"
+	"potat-api/common"
 
 	"github.com/redis/go-redis/v9"
 )
 
 var (
 	Redis *redis.Client
+	RedisErrNil = redis.Nil
 )
 
-func InitRedis(config utils.Config) error {
+func InitRedis(config common.Config) error {
 	Redis = redis.NewClient(&redis.Options{
 		Addr:     config.Redis.Host + ":" + config.Redis.Port,
 		Password: "",

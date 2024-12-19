@@ -22,20 +22,20 @@ type User struct {
 }
 
 type UserSettings struct {
-	IgnoreDropped  bool   `json:"ignore_dropped"`
-	ColorResponses bool  `json:"color_responses"`
-	NoReply        bool   `json:"no_reply"`
-	Language       string `json:"language"`
-	IsBot          bool   `json:"is_bot"`
-	IsSelfBot      bool   `json:"is_selfbot"`
+	IgnoreDropped  bool  	`json:"ignore_dropped"`
+	ColorResponses bool		`json:"color_responses"`
+	NoReply        bool  	`json:"no_reply"`
+	Language       string	`json:"language"`
+	IsBot          bool  	`json:"is_bot"`
+	IsSelfBot      bool  	`json:"is_selfbot"`
 }
 
 type UserConnection struct {
-	UserID   int                    `json:"user_id"`
+	ID   		 int                    `json:"user_id"`
 	Platform Platforms              `json:"platform"`
 	Username string                 `json:"platform_username"`
 	Display  string                 `json:"platform_display"`
-	ID       string                 `json:"platform_id"`
+	UserID   string                 `json:"platform_id"`
 	PFP      string                 `json:"platform_pfp"`
 	Meta     map[string]interface{} `json:"platform_metadata"`
 }
@@ -47,8 +47,8 @@ type KickChannelMeta struct {
 }
 
 type TwitchChannelMeta struct {
-	BotBanned    bool        `json:"bot_banned"`
-	TwitchBanned bool        `json:"twitch_banned"`
+	BotBanned    bool	`json:"bot_banned"`
+	TwitchBanned bool	`json:"twitch_banned"`
 }
 
 type TwitchUserMeta struct {
@@ -68,18 +68,18 @@ type TwitchRoles struct {
 }
 
 type Channel struct {
-	ChannelID    string          `json:"channel_id"`
-	Username     string          `json:"username"`
-	JoinedAt     *time.Time      `json:"joined_at,omitempty"`
-	AddedBy      []AddedByData   `json:"added_by,omitempty"`
-	Platform     Platforms       `json:"platform"`
-	Settings     ChannelSettings `json:"settings"`
-	Editors      []string        `json:"editors"`
-	Ambassadors  []string        `json:"ambassadors"`
+	ChannelID    string          				`json:"channel_id"`
+	Username     string          				`json:"username"`
+	JoinedAt     *time.Time      				`json:"joined_at,omitempty"`
+	AddedBy      []AddedByData   				`json:"added_by,omitempty"`
+	Platform     Platforms       				`json:"platform"`
+	Settings     ChannelSettings 				`json:"settings"`
+	Editors      []string        				`json:"editors"`
+	Ambassadors  []string        				`json:"ambassadors"`
 	Meta         map[string]interface{} `json:"meta"`
-	State        string          `json:"state"`
-	Commands     *[]ChannelCommand `json:"commands,omitempty"`
-	Blocks       FilteredBlocks   `json:"blocks,omitempty"`
+	State        string          				`json:"state"`
+	Commands     *[]ChannelCommand			`json:"commands,omitempty"`
+	Blocks       FilteredBlocks  				`json:"blocks,omitempty"`
 }
 
 type FilteredBlocks struct {
@@ -90,7 +90,7 @@ type FilteredBlocks struct {
 type Block struct {
 	ID 			      int       `json:"user_id"`
 	ChannelID   	string    `json:"channel_id"`
-	BlockedUserID int     `json:"blocked_user_id"`
+	BlockedUserID int     	`json:"blocked_user_id"`
 	BlockType   	BlockType `json:"block_type"`
 	CommandName   string    `json:"command_name,omitempty"`
 }
@@ -176,43 +176,42 @@ type ChannelCommand struct {
 }
 
 type Potatoes struct {
-	ID     		     int      `json:"user_id"`
-	PotatoCount    int      `json:"potato_count"`
-	PotatoPrestige int      `json:"potato_prestige"`
-	PotatoRank     int      `json:"potato_rank"`
-	TaxMultiplier  int		  `json:"tax_multiplier"`
-	FirstSeen      string   `json:"first_seen"`
-	StoleFrom      *string  `json:"stole_from"`
-	StoleAmount    *int     `json:"stole_amount"`
-	TrampledBy     *string  `json:"trampled_by"`
+	ID     		     int     `json:"user_id"`
+	PotatoCount    int     `json:"potato_count"`
+	PotatoPrestige int     `json:"potato_prestige"`
+	PotatoRank     int     `json:"potato_rank"`
+	TaxMultiplier  int		 `json:"tax_multiplier"`
+	FirstSeen      string  `json:"first_seen"`
+	StoleFrom      *string `json:"stole_from"`
+	StoleAmount    *int    `json:"stole_amount"`
+	TrampledBy     *string `json:"trampled_by"`
 }
 
 type PotatoAnalytics struct {
-	FUCKGOID 			  			int     `json:"user_id"`
-	AverageResponseTime   string  `json:"average_response_time"`
-	EatCount              int     `json:"eat_count"`
-	HarvestCount          int     `json:"harvest_count"`
-	StolenCount           int     `json:"stolen_count"`
-	TheftCount            int     `json:"theft_count"`
-	TrampledCount         int     `json:"trampled_count"`
-	TrampleCount          int     `json:"trample_count"`
-	CDRCount              int     `json:"cdr_count"`
-	QuizCount             int     `json:"quiz_count"`
-	QuizCompleteCount     int     `json:"quiz_complete_count"`
-	GuardBuyCount         int     `json:"guard_buy_count"`
-	FertilizerBuyCount    int     `json:"fertilizer_buy_count"`
-	CDRBuyCount           int     `json:"cdr_buy_count"`
-	NewQuizBuyCount       int     `json:"new_quiz_buy_count"`
-	GambleWinCount        int     `json:"gamble_win_count"`
-	GambleLossCount       int     `json:"gamble_loss_count"`
-	GambleWinsTotal       int     `json:"gamble_wins_total"`
-	GambleLossesTotal     int     `json:"gamble_losses_total"`
-	DuelWinCount          int     `json:"duel_win_count"`
-	DuelLossCount         int     `json:"duel_loss_count"`
-	DuelWinsAmount        int     `json:"duel_wins_amount"`
-	DuelLossesAmount      int     `json:"duel_losses_amount"`
-	DuelCaughtLosses      int     `json:"duel_caught_losses"`
-	AverageResponseCount  int     `json:"average_response_count"`
+	AverageResponseTime   string `json:"average_response_time"`
+	EatCount              int    `json:"eat_count"`
+	HarvestCount          int    `json:"harvest_count"`
+	StolenCount           int    `json:"stolen_count"`
+	TheftCount            int    `json:"theft_count"`
+	TrampledCount         int    `json:"trampled_count"`
+	TrampleCount          int    `json:"trample_count"`
+	CDRCount              int    `json:"cdr_count"`
+	QuizCount             int    `json:"quiz_count"`
+	QuizCompleteCount     int    `json:"quiz_complete_count"`
+	GuardBuyCount         int    `json:"guard_buy_count"`
+	FertilizerBuyCount    int    `json:"fertilizer_buy_count"`
+	CDRBuyCount           int    `json:"cdr_buy_count"`
+	NewQuizBuyCount       int    `json:"new_quiz_buy_count"`
+	GambleWinCount        int    `json:"gamble_win_count"`
+	GambleLossCount       int    `json:"gamble_loss_count"`
+	GambleWinsTotal       int    `json:"gamble_wins_total"`
+	GambleLossesTotal     int    `json:"gamble_losses_total"`
+	DuelWinCount          int    `json:"duel_win_count"`
+	DuelLossCount         int    `json:"duel_loss_count"`
+	DuelWinsAmount        int    `json:"duel_wins_amount"`
+	DuelLossesAmount      int    `json:"duel_losses_amount"`
+	DuelCaughtLosses      int    `json:"duel_caught_losses"`
+	AverageResponseCount  int    `json:"average_response_count"`
 }
 
 type PotatoSettings struct {
@@ -223,4 +222,9 @@ type PotatoData struct {
 	Potatoes
 	PotatoAnalytics
 	PotatoSettings
+}
+
+type Redirect struct {
+	Key string `json:"key"`
+	URL string `json:"url"`
 }

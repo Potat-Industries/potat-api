@@ -1,14 +1,27 @@
-package utils
-
-import (
-	"encoding/json"
-	"os"
-)
+package common
 
 type Config struct {
+	API        APIConfig				`json:"api"`
+	Redirects  RedirectsConfig	`json:"redirects"`
+	Prometheus PrometheusConfig	`json:"prometheus"`
 	Postgres   PostgresConfig   `json:"postgres"`
 	Clickhouse ClickhouseConfig `json:"clickhouse"`
 	Redis      RedisConfig      `json:"redis"`
+}
+
+type APIConfig struct {
+	Host string `json:"host"`
+	Port string `json:"port"`
+}
+
+type RedirectsConfig struct {
+	Host string `json:"host"`
+	Port string `json:"port"`
+}
+
+type PrometheusConfig struct {
+	Host string `json:"host"`
+	Port string `json:"port"`
 }
 
 type PostgresConfig struct {
@@ -30,19 +43,4 @@ type ClickhouseConfig struct {
 type RedisConfig struct {
 	Host string `json:"host"`
 	Port string `json:"port"`
-}
-
-func LoadConfig(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var config Config
-	err = json.Unmarshal(data, &config)
-	if err != nil {
-		return nil, err
-	}
-
-	return &config, nil
 }

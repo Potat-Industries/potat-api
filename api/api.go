@@ -1,51 +1,50 @@
 package api
 
 import (
+	"time"
 	"context"
 	"net/http"
+
+	"potat-api/common"
+	"potat-api/common/utils"
 	"potat-api/api/middleware"
-	"potat-api/api/utils"
-	"time"
 
 	"github.com/gorilla/mux"
 )
-
-var (
-	Server *http.Server
-)
-
 type Route struct {
 	Path string
 	Method string
 	Handler http.HandlerFunc
 }
 
-var Routes = []Route{}
+var server *http.Server
+var router *mux.Router
 
 func init() {
-	router := mux.NewRouter()
+	router = mux.NewRouter()
 
 	router.Use(middleware.LogRequest)
 	router.Use(middleware.GlobalLimiter)
+}
 
-	Server = &http.Server{
+func Stop() {
+	utils.Debug.Fatal(server.Shutdown(context.Background()))
+}
+
+func StartServing(config common.Config) error {
+	server = &http.Server{
 		Handler: router,
-		Addr:    "localhost:3111",
+		Addr:    config.API.Host + ":" + config.API.Port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-}
 
-func Stop() {
-	utils.Debug.Fatal(Server.Shutdown(context.Background()))
-}
+	utils.Info.Printf("API listening on %s", server.Addr)
 
-func StartServing() {
-	utils.Debug.Fatal(Server.ListenAndServe())
+	return server.ListenAndServe()
 }
 
 func SetRoute(route Route) {
-	router := Server.Handler.(*mux.Router)
 	router.HandleFunc(route.Path, route.Handler).Methods(route.Method)
 }

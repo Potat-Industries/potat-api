@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"potat-api/api/common"
-	"potat-api/api/utils"
+	"potat-api/common"
+	"potat-api/common/utils"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,9 +17,21 @@ type DB struct {
 	Pool *pgxpool.Pool
 }
 
-var Postgres *DB
+type LoaderKey struct {
+	ID 			 *int
+	UserID 	 *string
+	Username *string
+	Platform *string
+}
 
-func InitPostgres(config utils.Config) error {
+var (
+	Postgres *DB
+	PostgresNoRows = pgx.ErrNoRows
+)
+
+
+
+func InitPostgres(config common.Config) error {
 	dbConfig, err := loadConfig(config)
 	if err != nil {
 		return err
@@ -33,7 +46,7 @@ func InitPostgres(config utils.Config) error {
 	return nil
 }
 
-func loadConfig(config utils.Config) (*pgxpool.Config, error) {
+func loadConfig(config common.Config) (*pgxpool.Config, error) {
 	constring := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s",
 		config.Postgres.User,
@@ -411,4 +424,94 @@ func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.Potat
 	}
 
 	return &data, nil
+}
+
+func (db *DB) BatchUserConections(
+	ctx context.Context, 
+	IDs []int,
+) (*map[int][]common.UserConnection) {
+	query := `
+		SELECT 
+			user_id,
+			platform_id,
+			platform_username,
+			platform_display,
+			platform_pfp,
+			platform,
+			platform_metadata
+		FROM user_connections
+		WHERE user_id = ANY($1::INT[])
+	`
+
+	rows, err := db.Pool.Query(ctx, query, IDs)
+	if err != nil {
+		return nil
+	}
+
+	defer rows.Close()
+
+	var users = make(map[int][]common.UserConnection)
+	for rows.Next() {
+		var connection common.UserConnection
+		err := rows.Scan(
+			&connection.ID,
+			&connection.UserID,
+			&connection.Username,
+			&connection.Display,
+			&connection.PFP,
+			&connection.Platform,
+			&connection.Meta,
+		)
+		if err != nil {
+			return nil
+		}
+
+		users[connection.ID] = append(users[connection.ID], connection)
+	}
+
+	return &users
+}
+
+func (db *DB) GetRedirectByKey(ctx context.Context, key string) (string, error) {
+	query := `SELECT url FROM url_redirects WHERE key = $1`
+
+	var url string
+	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&url)
+	if err != nil {
+		return "", err
+	}
+
+	return url, nil
+}
+
+func (db *DB) GetKeyByRedirect(ctx context.Context, url string) (string, error) {
+	query := `SELECT key FROM url_redirects WHERE url = $1`
+
+	var key string
+	err := Postgres.Pool.QueryRow(ctx, query, url).Scan(&key)
+	if err != nil {
+		return "", err
+	}
+
+	return key, nil
+}
+
+func (db *DB) RedirectExists(ctx context.Context, key string) bool {
+	query := `SELECT EXISTS(SELECT 1 FROM url_redirects WHERE key = $1)`
+
+	var exists bool
+
+	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&exists)
+	if err != nil {
+		return false
+	}
+
+	return exists
+}
+
+func (db *DB) NewRedirect(ctx context.Context, key, url string) error {
+	query := `INSERT INTO url_redirects (key, url) VALUES ($1, $2)`
+
+	_, err := Postgres.Pool.Exec(ctx, query, key, url)
+	return err
 }

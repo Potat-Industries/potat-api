@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"time"
+	"strings"
+	"strconv"
 	"net/http"
 
-	"potat-api/api/utils"
+	"potat-api/common/utils"
 )
 
 type loggingResponseWriter struct {
@@ -25,8 +27,17 @@ func LogRequest(next http.Handler) http.Handler {
 
 		next.ServeHTTP(loggingRW, r)
 
+		utils.ObserveInboundRequests(
+			r.Host, 
+			r.RequestURI, 
+			r.RemoteAddr,
+			r.Method, 
+			strconv.Itoa(loggingRW.statusCode), 
+		)
+
 		utils.Debug.Printf(
-			"%s %s | Status: %d | Duration: %v | User-Agent: %s",
+			"Port: %s | %s %s | Status: %d | Duration: %v | User-Agent: %s",
+		  strings.Split(r.Host, ":")[1],
 			r.Method,
 			r.RequestURI,
 			loggingRW.statusCode,

@@ -3,7 +3,8 @@ package db
 import (
 	"context"
 	"fmt"
-	"potat-api/api/utils"
+	"potat-api/common"
+	"potat-api/common/utils"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -13,7 +14,7 @@ var (
 	Clickhouse driver.Conn
 )
 
-func InitClickhouse(config utils.Config) (error) {
+func InitClickhouse(config common.Config) (error) {
 	hostStr := fmt.Sprintf("%s:%s", config.Clickhouse.Host, config.Clickhouse.Port)
 
 	var (
