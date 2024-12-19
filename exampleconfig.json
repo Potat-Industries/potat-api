@@ -1,0 +1,37 @@
+{
+  "api": {
+    "host": "localhost",
+    "port": ""
+  },
+  "redirects": {
+    "host": "localhost",
+    "port": ""
+  },
+  "haste": {
+    "host": "localhost",
+    "port": "",
+    "keyLength": 6
+  },
+  "prometheus": {
+    "host": "localhost",
+    "port": ""
+  },
+  "postgres": {
+    "host": "localhost",
+    "port": "",
+    "database": "",
+    "user": "",
+    "password": ""
+  },
+  "clickhouse": {
+    "host": "localhost",
+    "port": "",
+    "database": "",
+    "user": "",
+    "password": ""
+  },
+  "redis": {
+    "host": "localhost",
+    "port": ""
+  }
+}
