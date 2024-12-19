@@ -59,7 +59,10 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 
 func generateUniqueKey(ctx context.Context) (string, error) {
 	for {
-		key := utils.RandomString(6)
+		key, err := utils.RandomString(6)
+		if err != nil {
+			return "", err
+		}
 		if db.Postgres.RedirectExists(ctx, key) {
 			return key, nil
 		}

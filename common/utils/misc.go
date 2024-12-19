@@ -1,16 +1,16 @@
 package utils
 
 import (
-	"strings"
-	"math/rand"
+	"crypto/rand"
+	"encoding/hex"
 )
 
-func RandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	var b strings.Builder
-	b.Grow(length)
-	for i := 0; i < length; i++ {
-		b.WriteByte(charset[rand.Intn(len(charset))])
+func RandomString(length int) (string, error){
+	bytes := make([]byte, length / 2)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
 	}
-	return b.String()
+	hexKey := hex.EncodeToString(bytes)
+	return hexKey, nil
 }
