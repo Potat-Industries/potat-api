@@ -3,6 +3,7 @@ package common
 type Config struct {
 	API        APIConfig				`json:"api"`
 	Redirects  RedirectsConfig	`json:"redirects"`
+	Haste			 HasteConfig			`json:"haste"`
 	Prometheus PrometheusConfig	`json:"prometheus"`
 	Postgres   PostgresConfig   `json:"postgres"`
 	Clickhouse ClickhouseConfig `json:"clickhouse"`
@@ -17,6 +18,12 @@ type APIConfig struct {
 type RedirectsConfig struct {
 	Host string `json:"host"`
 	Port string `json:"port"`
+}
+
+type HasteConfig struct {
+	Host string 		 `json:"host"`
+	Port string 		 `json:"port"`
+	KeyLength int		 `json:"keyLength"`
 }
 
 type PrometheusConfig struct {

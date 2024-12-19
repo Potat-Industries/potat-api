@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>haste</title>
+		<meta charset="utf-8">
+		<meta name="robots" content="noindex,nofollow">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+		<link rel="stylesheet" type="text/css" href="solarized_dark.css">
+		<link rel="stylesheet" type="text/css" href="application.css">
+
+		<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+		<script type="text/javascript" src="highlight.min.js"></script>
+		<script type="text/javascript" src="application.min.js"></script>
+
+		<script type="text/javascript">
+			let app = null;
+			// Handle pops
+			let handlePop = function(evt){
+				let path = evt.target.location.href;
+				if (path == app.baseUrl) app.newDocument(true);
+				else app.loadDocument(path.split('/').slice(-1)[0]);
+			};
+			// Set up the pop state to handle loads, skipping the first load
+			// to make chrome behave like others:
+			// http://code.google.com/p/chromium/issues/detail?id=63040
+			setTimeout(function(){
+				window.onpopstate = function(evt){
+					try { handlePop(evt); } catch(err){ /* not loaded yet */ }
+				};
+			}, 1000);
+			// Construct app and load initial path
+			$(function(){
+				let baseUrl = window.location.href.split('/');
+				baseUrl = baseUrl.slice(0, baseUrl.length - 1).join('/') + '/';
+				app = new haste('hastebin', { baseUrl: baseUrl });
+				handlePop({ target: window });
+			});
+		</script>
+
+	<body>
+		<ul id="messages"></ul>
+
+		<div id="key">
+			<div id="pointer" style="display: none;"></div>
+			<div id="box2">
+				<button class="save function button-picture">Save</button>
+				<button class="new function button-picture">New</button>
+				<button class="duplicate function button-picture">Duplicate & Edit</button>
+				<button class="raw function button-picture">Just Text</button>
+				<button class="website function button-picture">Website</button>
+			</div>
+			<div id="box3" style="display:none;">
+				<div class="label"></div>
+				<div class="shortcut"></div>
+			</div>
+		</div>
+
+		<div id="linenos"></div>
+		<div class="text-container">
+			<pre id="box" style="display: none;" class="hljs" tabindex="0"><code></code></pre>
+			<textarea spellcheck="false" style="display: none;"></textarea>
+		</div>

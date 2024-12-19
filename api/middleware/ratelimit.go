@@ -9,7 +9,7 @@ import (
 
 var globalLimiter = rate.NewLimiter(
 	rate.Every(100 * time.Second), 
-	10,
+	200,
 )
 
 func GlobalLimiter(next http.Handler) http.Handler {

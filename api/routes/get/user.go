@@ -107,7 +107,7 @@ type UserInfo struct {
 func init() {
 	api.SetRoute(api.Route{
 		Path:    "/users/{username}",
-		Method:  "GET",
+		Method:  http.MethodGet,
 		Handler: getUsers,
 	})
 }

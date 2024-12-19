@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -28,8 +30,6 @@ var (
 	Postgres *DB
 	PostgresNoRows = pgx.ErrNoRows
 )
-
-
 
 func InitPostgres(config common.Config) error {
 	dbConfig, err := loadConfig(config)
@@ -514,4 +514,44 @@ func (db *DB) NewRedirect(ctx context.Context, key, url string) error {
 
 	_, err := Postgres.Pool.Exec(ctx, query, key, url)
 	return err
+}
+
+func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
+	query := `
+		UPDATE haste
+		SET access_count = access_count + 1
+		WHERE key = $1
+		RETURNING convert_from(zstd_decompress(content::bytea), 'utf-8') AS text;
+	`
+	
+	var text string
+
+	err := Postgres.Pool.QueryRow(ctx, query, encode(key)).Scan(&text)
+	if err != nil {
+		return "", err
+	}
+
+	return text, nil
+}
+
+func (db *DB) NewHaste(
+	ctx context.Context, 
+	key string,
+	text []byte,
+	source string,
+) error {
+	query := `
+		INSERT INTO haste (key, content, source)
+		VALUES ($1, zstd_compress($2, null, 3), $3)
+		ON CONFLICT (key) DO NOTHING;
+	`
+
+	_, err := Postgres.Pool.Exec(ctx, query, encode(key), text, source)
+	return err
+}
+
+func encode(data string) string {
+	hash := md5.New()
+	hash.Write([]byte(data))
+	return hex.EncodeToString(hash.Sum(nil))
 }

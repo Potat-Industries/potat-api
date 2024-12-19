@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"time"
-	"strings"
 	"strconv"
 	"net/http"
 
@@ -37,7 +36,7 @@ func LogRequest(next http.Handler) http.Handler {
 
 		utils.Debug.Printf(
 			"Port: %s | %s %s | Status: %d | Duration: %v | User-Agent: %s",
-		  strings.Split(r.Host, ":")[1],
+		  r.Host,
 			r.Method,
 			r.RequestURI,
 			loggingRW.statusCode,

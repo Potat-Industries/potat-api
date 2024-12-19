@@ -22,7 +22,7 @@ func init() {
 
 	router.Use(middleware.LogRequest)
 	router.Use(middleware.GlobalLimiter)
-	router.HandleFunc("/{id}", getRedirect).Methods("GET")
+	router.HandleFunc("/{id}", getRedirect).Methods(http.MethodGet)
 }
 
 func StartServing(config common.Config) error {

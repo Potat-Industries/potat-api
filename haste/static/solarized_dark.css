@@ -1,0 +1,79 @@
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.5em;
+  background: #00000067;
+  color: #a59aab;
+}
+
+/* comments */
+.hljs-comment,
+.hljs-quote {
+  color: #6A9955;
+}
+
+/* const, await, import */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-addition {
+  color: #C586C0;
+}
+
+/* strings */
+.hljs-number,
+.hljs-string,
+.hljs-meta .hljs-meta-string,
+.hljs-literal,
+.hljs-doctag,
+.hljs-regexp {
+  color: #CE9178;
+}
+
+/* titles, functions */
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #DCDCAA;
+}
+
+/* variables, attributes, keys, classes */
+.hljs-attribute,
+.hljs-attr,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-class .hljs-title,
+.hljs-type {
+  color: #569CD6;
+}
+
+/* Solarized Orange */
+.hljs-symbol,
+.hljs-bullet,
+.hljs-subst,
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-link {
+  color: #DCDCAA;
+}
+
+/* this */
+.hljs-built_in,
+.hljs-deletion {
+  color: #4274c9;
+}
+
+.hljs-formula {
+  background: #000000;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}

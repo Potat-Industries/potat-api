@@ -16,7 +16,7 @@ import (
 func init() {
 	api.SetRoute(api.Route{
 		Path:    "/redirect",
-		Method:  "POST",
+		Method:  http.MethodPost,
 		Handler: createRedirect,
 	})
 }

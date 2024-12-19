@@ -1,14 +1,15 @@
 package main
 
 import (
-	"os"
-	"syscall"
 	"context"
+	"os"
 	"os/signal"
+	"syscall"
 
 	"potat-api/api"
 	"potat-api/common/db"
 	"potat-api/common/utils"
+	"potat-api/haste"
 	"potat-api/redirects"
 
 	_ "potat-api/api/routes/get"
@@ -60,7 +61,7 @@ func main() {
 	utils.Info.Println("Startup complete, serving APIs...")
 
 	apiChan := make(chan error)
-	// hastebinChan := make(chan error)
+	hastebinChan := make(chan error)
 	// uploaderChan := make(chan error)
 	redirectsChan := make(chan error)
 	metricsChan := make(chan error)
@@ -72,6 +73,10 @@ func main() {
 		syscall.SIGTERM, 
 		syscall.SIGINT,
 	)
+
+	go func() {
+		hastebinChan <- haste.StartServing(*config)
+	}()
 
 	go func() {
 		redirectsChan <- redirects.StartServing(*config)
@@ -86,6 +91,8 @@ func main() {
 	}()
 
 	select {
+	case err := <-hastebinChan:
+		utils.Error.Panicln("Hastebin server error!", err)
 	case err := <-redirectsChan:
 		utils.Error.Panicln("Redirects server error!", err)
 	case err := <-apiChan:
