@@ -1,13 +1,13 @@
 package haste
 
 import (
-	"io"
-	"os"
-	"time"
 	"context"
-	"net/http"
-	"path/filepath"
 	"encoding/json"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"potat-api/api/middleware"
 	"potat-api/common"
@@ -40,15 +40,10 @@ func init() {
 
 	staticPath := filepath.Join(pwd, "./haste/static")
 
-  
-
-	router.HandleFunc("/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/"
-		
 		http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
 	}).Methods(http.MethodGet)
-
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir(staticPath)))
 }
 
 func StartServing(config common.Config) error {
