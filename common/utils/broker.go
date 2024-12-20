@@ -13,7 +13,7 @@ var (
 	Conn *amqp.Connection
 )
 
-func CreateBroker(config common.Config) error {
+func CreateBroker(config common.Config) (func(), error) {
 	connString := fmt.Sprintf(
 		"amqp://%s:%s@%s:%s/",
 		config.RabbitMQ.User,
@@ -22,33 +22,104 @@ func CreateBroker(config common.Config) error {
 		config.RabbitMQ.Port,
 	)
 
-  var err error
-  Conn, err = amqp.Dial(connString)
+	var err error
+	Conn, err = amqp.Dial(connString)
 	if err != nil {
-    return err
-  }
+		return nil, err
+	}
 
 	Info.Printf("Connected to RabbitMQ")
 
-	// send example test message
-	err = PublishToQueue(context.Background(), "test message")
+	err = PublishToQueue(
+		context.Background(), 
+		"connected", 
+		5 * time.Second,
+	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	err = consumeFromQueue(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	cleanup := func() {
+		if Conn != nil {
+			_ = Conn.Close()
+			Info.Printf("RabbitMQ connection closed")
+		}
+	}
+
+	return cleanup, nil
 }
 
 func Stop() {
 	if Conn != nil {
 		_ = Conn.Close()
-		Info.Printf("RabbitMQ connection closed")
+		Warn.Printf("RabbitMQ connection closed")
 	}
+}
+
+func consumeFromQueue(
+	ctx context.Context,
+) error {
+	ch, err := Conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	queue, err := ch.QueueDeclare(
+		"potat-api",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = ch.QueueBind(
+		queue.Name,
+		queue.Name,
+		"potat-api",
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	msgs, err := ch.ConsumeWithContext(
+		ctx,
+		queue.Name,
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for d := range msgs {
+			Debug.Printf("[x] Received %s", d.Body)
+			handleMessage(string(d.Body))
+		}
+	}()
+
+	return nil
 }
 
 func PublishToQueue(
 	ctx context.Context,
 	message string,
+	ttl time.Duration,
 ) error {
 	ch, err := Conn.Channel()
 	if err != nil {
@@ -92,12 +163,23 @@ func PublishToQueue(
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(message),
+			Expiration:  fmt.Sprintf("%d", ttl.Milliseconds()),
 		},
 	)
 	if err != nil {
 		return err
 	}
 
-	Debug.Printf(" [x] Sent %s", message)
+	Debug.Printf("[x] Sent %s", message)
 	return nil
 }
+
+func handleMessage(message string) {
+	switch message {
+	case "shutdown":
+		break; // Do nothing for now :)
+	case "ping":
+	  PublishToQueue(context.Background(), "pong", 5 * time.Second)
+	}
+}
+		

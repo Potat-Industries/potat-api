@@ -2,15 +2,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"potat-api/api"
-	"potat-api/haste"
 	"potat-api/common/db"
-	"potat-api/redirects"
 	"potat-api/common/utils"
+	"potat-api/haste"
+	"potat-api/redirects"
 
 	_ "potat-api/api/routes/get"
 	_ "potat-api/api/routes/post"
@@ -30,7 +32,7 @@ func main() {
 		utils.Error.Panicln("Failed initializing Postgres", err)
 	} 
 
-	err = db.Postgres.Ping(ctx)
+	err = runWithTimeout(db.Postgres.Ping, ctx)
 	if err != nil {
 		utils.Error.Panicln("Failed pinging Postgres", err)
 	}
@@ -41,7 +43,7 @@ func main() {
 		utils.Error.Panicln("Failed initializing Clickhouse", err)
 	} 
 
-	err = db.Clickhouse.Ping(ctx)
+	err = runWithTimeout(db.Clickhouse.Ping, ctx)
 	if err != nil {
 		utils.Error.Panicln("Failed pinging Clickhouse", err)
 	} 
@@ -60,7 +62,12 @@ func main() {
 	
 	utils.Info.Println("Startup complete, serving APIs...")
 
-	utils.CreateBroker(*config)
+	cleanup, err := utils.CreateBroker(*config)
+	if err != nil {
+		utils.Error.Printf("Failed to connect to RabbitMQ: %v", err)
+		os.Exit(1)
+	}
+	defer cleanup()
 
 	apiChan := make(chan error)
 	hastebinChan := make(chan error)
@@ -108,4 +115,29 @@ func main() {
 	// Do something i guess
 
 	utils.Warn.Println("Shutting down...")
+}
+
+func runWithTimeout(
+	f func(ctx context.Context) error, 
+	ctx context.Context,
+	) error {
+	done := make(chan error, 1)
+
+	var lastError error
+	for i := 0; i < 3; i++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, 1 * time.Second)
+		defer cancel()
+
+		go func() {	done <- f(attemptCtx) }()
+
+		select {
+		case err := <-done:
+			return err
+		case <-attemptCtx.Done():
+			utils.Warn.Println("Ping timed out, retrying...")
+			lastError = errors.New("ping timed out")
+		}
+	}
+
+	return lastError
 }
