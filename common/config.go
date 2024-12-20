@@ -3,6 +3,7 @@ package common
 type Config struct {
 	API        APIConfig				`json:"api"`
 	Redirects  RedirectsConfig	`json:"redirects"`
+	RabbitMQ   RabbitMQConfig		`json:"rabbitmq"`
 	Haste			 HasteConfig			`json:"haste"`
 	Prometheus PrometheusConfig	`json:"prometheus"`
 	Postgres   PostgresConfig   `json:"postgres"`
@@ -13,6 +14,13 @@ type Config struct {
 type APIConfig struct {
 	Host string `json:"host"`
 	Port string `json:"port"`
+}
+
+type RabbitMQConfig struct {
+	Host     string `json:"host"`
+	Port     string `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"`
 }
 
 type RedirectsConfig struct {

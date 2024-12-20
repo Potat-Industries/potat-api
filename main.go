@@ -7,10 +7,10 @@ import (
 	"syscall"
 
 	"potat-api/api"
-	"potat-api/common/db"
-	"potat-api/common/utils"
 	"potat-api/haste"
+	"potat-api/common/db"
 	"potat-api/redirects"
+	"potat-api/common/utils"
 
 	_ "potat-api/api/routes/get"
 	_ "potat-api/api/routes/post"
@@ -59,6 +59,8 @@ func main() {
 	utils.Info.Println("Redis initialized")
 	
 	utils.Info.Println("Startup complete, serving APIs...")
+
+	utils.CreateBroker(*config)
 
 	apiChan := make(chan error)
 	hastebinChan := make(chan error)
