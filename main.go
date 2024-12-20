@@ -13,6 +13,7 @@ import (
 	"potat-api/common/utils"
 	"potat-api/haste"
 	"potat-api/redirects"
+	"potat-api/uploader"
 
 	_ "potat-api/api/routes/get"
 	_ "potat-api/api/routes/post"
@@ -59,23 +60,18 @@ func main() {
 		utils.Error.Panicln("Failed pinging Redis", err)
 	}
 	utils.Info.Println("Redis initialized")
-	
+
+	if config.RabbitMQ.Enabled {
+		cleanup, err := utils.CreateBroker(*config)
+		if err != nil {
+			utils.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
+		}
+		defer cleanup()
+	}
+
 	utils.Info.Println("Startup complete, serving APIs...")
 
-	cleanup, err := utils.CreateBroker(*config)
-	if err != nil {
-		utils.Error.Printf("Failed to connect to RabbitMQ: %v", err)
-		os.Exit(1)
-	}
-	defer cleanup()
-
-	apiChan := make(chan error)
-	hastebinChan := make(chan error)
-	// uploaderChan := make(chan error)
-	redirectsChan := make(chan error)
-	metricsChan := make(chan error)
 	shutdownChan := make(chan os.Signal, 1)
-
 	signal.Notify(
 		shutdownChan, 
 		os.Interrupt, 
@@ -83,21 +79,40 @@ func main() {
 		syscall.SIGINT,
 	)
 
-	go func() {
-		hastebinChan <- haste.StartServing(*config)
-	}()
+	hastebinChan := make(chan error)
+	if config.Haste.Enabled {
+		go func() {
+			hastebinChan <- haste.StartServing(*config)
+		}()
+	}
 
-	go func() {
-		redirectsChan <- redirects.StartServing(*config)
-	}()
+	redirectsChan := make(chan error)
+	if config.Redirects.Enabled {
+		go func() {
+			redirectsChan <- redirects.StartServing(*config)
+		}()
+	}
 
-	go func() {
-		apiChan <- api.StartServing(*config)
-	}()
+	apiChan := make(chan error)
+	if config.API.Enabled {
+		go func() {
+			apiChan <- api.StartServing(*config)
+		}()
+	}
 
-	go func() {
-		metricsChan <- utils.ObserveMetrics(*config)
-	}()
+	metricsChan := make(chan error)
+	if config.Prometheus.Enabled {
+		go func() {
+			metricsChan <- utils.ObserveMetrics(*config)
+		}()
+	}
+
+	uploaderChan := make(chan error)
+	if config.Uploader.Enabled {
+		go func() {
+			uploaderChan <- uploader.StartServing(*config)
+		}()
+	}
 
 	select {
 	case err := <-hastebinChan:

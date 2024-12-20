@@ -14,12 +14,28 @@ var (
 )
 
 func CreateBroker(config common.Config) (func(), error) {
+	user := config.RabbitMQ.User
+	if user == "" {
+		user = "guest"
+	}
+
+	password := config.RabbitMQ.Password
+	if password == "" {
+		password = "guest"
+	}
+
+	host := config.RabbitMQ.Host
+	if host == "" {
+		host = "localhost"
+	}
+
+	port := config.RabbitMQ.Port
+	if port == "" {
+		port = "5672"
+	}
+
 	connString := fmt.Sprintf(
-		"amqp://%s:%s@%s:%s/",
-		config.RabbitMQ.User,
-		config.RabbitMQ.Password,
-		config.RabbitMQ.Host,
-		config.RabbitMQ.Port,
+		"amqp://%s:%s@%s:%s/", user, password, host, port,
 	)
 
 	var err error
@@ -64,6 +80,11 @@ func Stop() {
 func consumeFromQueue(
 	ctx context.Context,
 ) error {
+	if Conn == nil {
+		Warn.Println("RabbitMQ connection not established")
+		return nil
+	}
+
 	ch, err := Conn.Channel()
 	if err != nil {
 		return err
@@ -121,6 +142,11 @@ func PublishToQueue(
 	message string,
 	ttl time.Duration,
 ) error {
+	if Conn == nil {
+		Warn.Println("RabbitMQ connection not established")
+		return nil
+	}
+
 	ch, err := Conn.Channel()
 	if err != nil {
 		return err 

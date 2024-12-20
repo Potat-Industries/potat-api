@@ -32,6 +32,10 @@ func Stop() {
 }
 
 func StartServing(config common.Config) error {
+	if config.API.Host == "" || config.API.Port == "" {
+		utils.Error.Fatal("Config: API host and port must be set")
+	}
+	
 	server = &http.Server{
 		Handler: router,
 		Addr:    config.API.Host + ":" + config.API.Port,

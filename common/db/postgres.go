@@ -47,13 +47,33 @@ func InitPostgres(config common.Config) error {
 }
 
 func loadConfig(config common.Config) (*pgxpool.Config, error) {
+	user := config.Postgres.User
+	if user == "" {
+		user = "postgres"
+	}
+
+	host := config.Postgres.Host
+	if host == "" {
+		host = "localhost"
+	}
+
+	port := config.Postgres.Port
+	if port == "" {
+		port = "5432"
+	}
+
+	database := config.Postgres.Database
+	if database == "" {
+		utils.Error.Panicln("Config: Postgres database must be set")
+	}
+
 	constring := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s",
-		config.Postgres.User,
+		user,
 		config.Postgres.Password,
-		config.Postgres.Host,
-		config.Postgres.Port,
-		config.Postgres.Database,
+		host,
+		port,
+		database,
 	)
 
 	dbConfig, err := pgxpool.ParseConfig(constring)

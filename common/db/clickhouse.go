@@ -15,7 +15,17 @@ var (
 )
 
 func InitClickhouse(config common.Config) (error) {
-	hostStr := fmt.Sprintf("%s:%s", config.Clickhouse.Host, config.Clickhouse.Port)
+	host := config.Clickhouse.Host
+	if host == "" {
+		host = "localhost"
+	}
+
+	port := config.Clickhouse.Port
+	if port == "" {
+		port = "9000"
+	}
+
+	hostStr := fmt.Sprintf("%s:%s", host, port)
 
 	var (
 		ctx = context.Background()

@@ -1,24 +1,34 @@
 {
   "api": {
+    "enabled": false,
     "host": "localhost",
     "port": ""
   },
   "redirects": {
+    "enabled": false,
     "host": "localhost",
     "port": ""
   },
+  "uploader": {
+    "enabled": false,
+    "port": "",
+    "host": "localhost"
+  },
   "rabbitmq": {
+    "enabled": false,
     "host": "localhost",
     "port": "",
     "user": "",
     "password": ""
   },
   "haste": {
+    "enabled": false,
     "host": "localhost",
     "port": "",
     "keyLength": 6
   },
   "prometheus": {
+    "enabled": false,
     "host": "localhost",
     "port": ""
   },
