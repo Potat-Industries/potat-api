@@ -14,13 +14,6 @@
     "port": "",
     "host": "localhost"
   },
-  "rabbitmq": {
-    "enabled": false,
-    "host": "localhost",
-    "port": "",
-    "user": "",
-    "password": ""
-  },
   "haste": {
     "enabled": false,
     "host": "localhost",
@@ -31,6 +24,12 @@
     "enabled": false,
     "host": "localhost",
     "port": ""
+  },
+  "rabbitmq": {
+    "host": "localhost",
+    "port": "",
+    "user": "",
+    "password": ""
   },
   "postgres": {
     "host": "localhost",

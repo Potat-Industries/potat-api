@@ -1,19 +1,20 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
+	"errors"
+	"syscall"
+	"context"
+	"os/signal"
 
 	"potat-api/api"
+	"potat-api/haste"
+	"potat-api/common"
+	"potat-api/uploader"
+	"potat-api/redirects"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"potat-api/haste"
-	"potat-api/redirects"
-	"potat-api/uploader"
 
 	_ "potat-api/api/routes/get"
 	_ "potat-api/api/routes/post"
@@ -23,49 +24,16 @@ func main() {
 	utils.Info.Println("Starting Potat API...")
 
 	ctx := context.Background()
-	config, err := utils.LoadConfig()
-	if err != nil {
-		utils.Error.Panicln("Failed loading config", err)
-	}
+	config := utils.LoadConfig()
 
-	err = db.InitPostgres(*config)
-	if err != nil {
-		utils.Error.Panicln("Failed initializing Postgres", err)
-	} 
+	initPostgres(*config, ctx)
 
-	err = runWithTimeout(db.Postgres.Ping, ctx)
-	if err != nil {
-		utils.Error.Panicln("Failed pinging Postgres", err)
-	}
-	utils.Info.Println("Postgres initialized")
+	initRedis(*config, ctx)
 
-	err = db.InitClickhouse(*config)
-	if err != nil {
-		utils.Error.Panicln("Failed initializing Clickhouse", err)
-	} 
+	if config.API.Enabled {
+		initClickhouse(*config, ctx)
 
-	err = runWithTimeout(db.Clickhouse.Ping, ctx)
-	if err != nil {
-		utils.Error.Panicln("Failed pinging Clickhouse", err)
-	} 
-	utils.Info.Println("Clickhouse initialized")
-
-	err = db.InitRedis(*config)
-	if err != nil {
-		utils.Error.Panicln("Failed initializing Redis", err)
-	}
-
-	err = db.Redis.Ping(ctx).Err()
-	if err != nil {
-		utils.Error.Panicln("Failed pinging Redis", err)
-	}
-	utils.Info.Println("Redis initialized")
-
-	if config.RabbitMQ.Enabled {
-		cleanup, err := utils.CreateBroker(*config)
-		if err != nil {
-			utils.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
-		}
+		cleanup := initRabbitMQ(*config, ctx)
 		defer cleanup()
 	}
 
@@ -133,7 +101,7 @@ func main() {
 }
 
 func runWithTimeout(
-	f func(ctx context.Context) error, 
+	f func(ctx context.Context) error,
 	ctx context.Context,
 	) error {
 	done := make(chan error, 1)
@@ -155,4 +123,51 @@ func runWithTimeout(
 	}
 
 	return lastError
+}
+
+func initPostgres(config common.Config, ctx context.Context) {
+	err := db.InitPostgres(config)
+	if err != nil {
+		utils.Error.Panicln("Failed initializing Postgres", err)
+	} 
+	err = runWithTimeout(db.Postgres.Ping, ctx)
+	if err != nil {
+		utils.Error.Panicln("Failed pinging Postgres", err)
+	}
+	utils.Info.Println("Postgres initialized")
+}
+
+func initRedis(config common.Config, ctx context.Context) {
+	err := db.InitRedis(config)
+	if err != nil {
+		utils.Error.Panicln("Failed initializing Redis", err)
+	}
+
+	err = db.Redis.Ping(ctx).Err()
+	if err != nil {
+		utils.Error.Panicln("Failed pinging Redis", err)
+	}
+	utils.Info.Println("Redis initialized")
+}
+
+func initClickhouse(config common.Config, ctx context.Context) {
+	err := db.InitClickhouse(config)
+	if err != nil {
+		utils.Error.Panicln("Failed initializing Clickhouse", err)
+	}
+
+	err = runWithTimeout(db.Clickhouse.Ping, ctx)
+	if err != nil {
+		utils.Error.Panicln("Failed pinging Clickhouse", err)
+	} 
+	utils.Info.Println("Clickhouse initialized")
+}
+
+func initRabbitMQ(config common.Config, ctx context.Context) func() {
+	cleanup, err := utils.CreateBroker(config, ctx)
+	if err != nil {
+		utils.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
+	}
+
+	return cleanup
 }

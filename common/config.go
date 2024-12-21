@@ -19,7 +19,6 @@ type APIConfig struct {
 }
 
 type RabbitMQConfig struct {
-	Enabled  bool   `json:"enabled"`
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 	User     string `json:"user"`

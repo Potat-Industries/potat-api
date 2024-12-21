@@ -13,7 +13,7 @@ var (
 	Conn *amqp.Connection
 )
 
-func CreateBroker(config common.Config) (func(), error) {
+func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
 	user := config.RabbitMQ.User
 	if user == "" {
 		user = "guest"
@@ -55,7 +55,7 @@ func CreateBroker(config common.Config) (func(), error) {
 		return nil, err
 	}
 
-	err = consumeFromQueue(context.Background())
+	err = consumeFromQueue(ctx)
 	if err != nil {
 		return nil, err
 	}

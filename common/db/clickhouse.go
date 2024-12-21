@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"fmt"
 	"potat-api/common"
 	"potat-api/common/utils"
@@ -25,34 +24,20 @@ func InitClickhouse(config common.Config) (error) {
 		port = "9000"
 	}
 
-	hostStr := fmt.Sprintf("%s:%s", host, port)
-
-	var (
-		ctx = context.Background()
-		conn, err = clickhouse.Open(&clickhouse.Options{
-			Addr: []string{hostStr},
-			Auth: clickhouse.Auth{
-				Username: config.Clickhouse.User,
-				Password: config.Clickhouse.Password,
-			},
-			Debugf: utils.Debug.Printf,
-		})
-	)
-
-	if err != nil {
-		return err
+	user := config.Clickhouse.User
+	if user == "" {
+		user = "default"
 	}
 
-	if err := conn.Ping(ctx); err != nil {
-		if exception, ok := err.(*clickhouse.Exception); ok {
-			utils.Error.Panicf(
-				"Exception [%d] %s \n%s\n", 
-				exception.Code, 
-				exception.Message, 
-				exception.StackTrace,
-			)
-		}
+	hostStr := fmt.Sprintf("%s:%s", host, port)
 
+	conn, err := clickhouse.Open(&clickhouse.Options{
+		Addr: []string{hostStr},
+		Auth: clickhouse.Auth{Username: user,	Password: config.Clickhouse.Password},
+		Debugf: utils.Debug.Printf,
+	})
+
+	if err != nil {
 		return err
 	}
 

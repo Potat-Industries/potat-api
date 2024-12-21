@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"potat-api/common"
 
 	"github.com/redis/go-redis/v9"
@@ -30,11 +29,6 @@ func InitRedis(config common.Config) error {
 	}
 
 	Redis = redis.NewClient(options)
-
-	_, err := Redis.Ping(context.Background()).Result()
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
