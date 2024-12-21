@@ -100,7 +100,7 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !strings.HasPrefix(redirect, "http://") {
+	if !strings.HasPrefix(redirect, "https://") {
 		redirect = "https://" + redirect
 	}
 
