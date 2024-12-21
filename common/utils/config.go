@@ -7,8 +7,8 @@ import (
 	"potat-api/common"
 )
 
-func LoadConfig(path string) (*common.Config, error) {
-	data, err := os.ReadFile(path)
+func LoadConfig() (*common.Config, error) {
+	data, err := loadOrCopy()
 	if err != nil {
 		return nil, err
 	}
@@ -20,4 +20,32 @@ func LoadConfig(path string) (*common.Config, error) {
 	}
 
 	return &config, nil
+}
+
+func loadOrCopy() ([]byte, error) {
+	data, err := os.ReadFile("config.json")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return copyExampleConfig()
+		}
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func copyExampleConfig() ([]byte, error) {
+	Warn.Println("Config file not found, copying example config")
+
+	data, err := os.ReadFile("exampleconfig.json")
+	if err != nil {
+		return nil, err
+	}
+
+	err = os.WriteFile("config.json", data, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }

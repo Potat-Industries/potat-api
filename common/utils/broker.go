@@ -63,7 +63,7 @@ func CreateBroker(config common.Config) (func(), error) {
 	cleanup := func() {
 		if Conn != nil {
 			_ = Conn.Close()
-			Info.Printf("RabbitMQ connection closed")
+			Warn.Printf("RabbitMQ connection closed")
 		}
 	}
 

@@ -23,7 +23,7 @@ func main() {
 	utils.Info.Println("Starting Potat API...")
 
 	ctx := context.Background()
-	config, err := utils.LoadConfig("config.json")
+	config, err := utils.LoadConfig()
 	if err != nil {
 		utils.Error.Panicln("Failed loading config", err)
 	}

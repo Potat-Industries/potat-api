@@ -32,6 +32,10 @@ func ObserveMetrics(config common.Config) error {
 }
 
 func ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string) {
+	if httpRequestCounter == nil {
+		return
+	}
+	
 	httpRequestCounter.WithLabelValues(
 		host,
 		endpoint,

@@ -64,7 +64,7 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) {
 
 	database := config.Postgres.Database
 	if database == "" {
-		utils.Error.Panicln("Config: Postgres database must be set")
+		database = "postgres"
 	}
 
 	constring := fmt.Sprintf(
