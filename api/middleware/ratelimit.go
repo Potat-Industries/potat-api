@@ -1,12 +1,14 @@
 package middleware
 
 import (
-	"time"
-	"strconv"
 	"context"
+	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	"potat-api/common/db"
+	"potat-api/common/utils"
 )
 
 func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.Handler {
@@ -24,6 +26,7 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 					http.StatusText(http.StatusInternalServerError),
 					http.StatusInternalServerError,
 				)
+				return
 			}
 
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(remainingTTL, 10))
@@ -32,11 +35,14 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 			w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
 
 			if !allowed {
+				w.Header().Set("Retry-After", strconv.FormatInt(remainingTTL, 10))
+
 				http.Error(
 					w,
 					http.StatusText(http.StatusTooManyRequests),
 					http.StatusTooManyRequests,
 				)
+				return
 			}
 
 			next.ServeHTTP(w, r)
@@ -58,7 +64,10 @@ func getIpToken(
 		end
 
 		local ttl = redis.call("TTL", KEYS[1])
-		local allowed = current <= tonumber(ARGV[2])
+		local allowed = 0
+		if current <= tonumber(ARGV[2]) then
+			allowed = 1
+		end
 
 		return {current, allowed, ttl}
 	`
@@ -72,10 +81,15 @@ func getIpToken(
 	).Result()
 
 	if err != nil {
+		utils.Error.Println("Error evaluating Lua script", err)
 		return false, 0, 0, err
 	}
 
 	results := result.([]interface{})
+	if len(results) != 3 {
+		return false, 0, 0, errors.New("invalid result from Redis")
+	}
+
 	remaining := limit - results[0].(int64)
 	allowed := results[1].(int64) == 1
 	remainingTTL := results[2].(int64)  
