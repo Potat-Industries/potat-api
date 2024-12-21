@@ -42,7 +42,7 @@ func copyExampleConfig() ([]byte, error) {
 		return nil, err
 	}
 
-	err = os.WriteFile("config.json", data, 0644)
+	err = os.Rename("exampleconfig.json", "config.json")
 	if err != nil {
 		return nil, err
 	}
