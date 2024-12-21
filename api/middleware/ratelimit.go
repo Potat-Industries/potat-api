@@ -9,47 +9,39 @@ import (
 	"potat-api/common/db"
 )
 
+func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := r.RemoteAddr
+			if forwardedFor := r.Header.Get("CF-Connecting-IP"); forwardedFor != "" {
+				ip = forwardedFor
+			}
 
-// TODO make this configurable per route or something
+			allowed, remaining, remainingTTL, err := getIpToken(ip, r.Context(), limit, window)
+			if err != nil {
+				http.Error(
+					w,
+					http.StatusText(http.StatusInternalServerError),
+					http.StatusInternalServerError,
+				)
+			}
 
-func GlobalLimiter(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if forwardedFor := r.Header.Get("CF-Connecting-IP"); forwardedFor != "" {
-			ip = forwardedFor
-		}
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(remainingTTL, 10))
+			w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(limit, 10))
+			w.Header().Set("X-RateLimit-Window", strconv.FormatInt(int64(window.Seconds()), 10))
+			w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
 
-		allowed, remaining, remainingTTL, err := getIpToken(
-			ip,
-			r.Context(),
-			100,
-			1 * time.Minute,
-		)
+			if !allowed {
+				http.Error(
+					w,
+					http.StatusText(http.StatusTooManyRequests),
+					http.StatusTooManyRequests,
+				)
+			}
 
-		if err != nil {
-			http.Error(
-				w,
-				http.StatusText(http.StatusInternalServerError),
-				http.StatusInternalServerError,
-			)
-		}
-
-		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(remainingTTL, 10))
-		w.Header().Set("X-RateLimit-Limit", "100")
-		w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
-
-		if !allowed {
-			http.Error(
-				w,
-				http.StatusText(http.StatusTooManyRequests),
-				http.StatusTooManyRequests,
-			)
-		}
-		
-		w.Header().Set("X-Forwarded-For", ip)
-
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func getIpToken(

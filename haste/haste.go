@@ -30,9 +30,10 @@ func init() {
 
 	router = mux.NewRouter()
 
+	limiter := middleware.NewRateLimiter(100, 1 * time.Minute)
 	router.Use(middleware.LogRequest)
-	router.Use(middleware.GlobalLimiter)
-
+	router.Use(limiter)
+	
 	router.HandleFunc("/raw/{id}", handleGetRaw).Methods(http.MethodGet)
 	router.HandleFunc("/documents", handlePost).Methods(http.MethodPost)
 	router.HandleFunc("/documents/{id}", handleGet).Methods(http.MethodGet)

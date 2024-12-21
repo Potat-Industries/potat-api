@@ -18,8 +18,9 @@ var router *mux.Router
 func init() {
 	router = mux.NewRouter()
 
+	limiter := middleware.NewRateLimiter(100, 1 * time.Minute)
 	router.Use(middleware.LogRequest)
-	router.Use(middleware.GlobalLimiter)
+	router.Use(limiter)
 }
 
 func StartServing(config common.Config) error {
