@@ -1,9 +1,10 @@
 package middleware
 
 import (
-	"time"
-	"strconv"
+	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"potat-api/common/utils"
 )
@@ -42,9 +43,9 @@ func LogRequest(next http.Handler) http.Handler {
 			cachehit,
 		)
 
-		utils.Debug.Printf(
+		line := fmt.Sprintf(
 			"Host: %s | %s %s | Cache %s | Status: %d | Duration: %v | User-Agent: %s",
-		  r.Host,
+		  	r.Host,
 			r.Method,
 			r.RequestURI,
 			cachehit,
@@ -52,5 +53,13 @@ func LogRequest(next http.Handler) http.Handler {
 			time.Since(startTime),
 			r.UserAgent(),
 		)
+
+		if loggingRW.statusCode >= 500 {
+			utils.Error.Println(line)
+		} else if loggingRW.statusCode >= 400 && loggingRW.statusCode < 500 {
+			utils.Warn.Println(line)
+		} else {
+			utils.Debug.Println(line)
+		}
 	})
 }

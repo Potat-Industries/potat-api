@@ -310,7 +310,7 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*common.Ch
 	var wg sync.WaitGroup
 
 	wg.Add(2)
-	
+
 	var commands *[]common.ChannelCommand
 	go func() {
 		defer wg.Done()
@@ -319,8 +319,8 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*common.Ch
 			commands = cmds
 		}
 	}()
-	
-	
+
+
 	var blocks []common.Block
 	go func() {
 		defer wg.Done()
@@ -329,21 +329,21 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*common.Ch
 			blocks = *bs
 		}
 	}()
-	
+
 	wg.Wait()
-	
+
 	if commands != nil {
 		channel.Commands = commands
 	} else {
 		channel.Commands = &[]common.ChannelCommand{}
 	}
-	
+
 	if len(blocks) > 0 {
 		channel.Blocks = common.FilteredBlocks{
 			Users:    &[]common.Block{},
 			Commands: &[]common.Block{},
 		}
-	
+
 		for _, block := range blocks {
 			if block.BlockType == common.UserBlock {
 				*channel.Blocks.Users = append(*channel.Blocks.Users, block)
@@ -354,13 +354,13 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*common.Ch
 	} else {
 		channel.Blocks = common.FilteredBlocks{}
 	}
-	
+
 	return &channel, nil
 }
 
 func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.PotatoData, error) {
 	query := `
-		SELECT 
+		SELECT
 			p.user_id,
 			p.potato_count,
 			p.potato_prestige,
@@ -447,11 +447,11 @@ func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.Potat
 }
 
 func (db *DB) BatchUserConections(
-	ctx context.Context, 
+	ctx context.Context,
 	IDs []int,
 ) (*map[int][]common.UserConnection) {
 	query := `
-		SELECT 
+		SELECT
 			user_id,
 			platform_id,
 			platform_username,
@@ -555,7 +555,7 @@ func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
 }
 
 func (db *DB) NewHaste(
-	ctx context.Context, 
+	ctx context.Context,
 	key string,
 	text []byte,
 	source string,
@@ -574,4 +574,86 @@ func encode(data string) string {
 	hash := md5.New()
 	hash.Write([]byte(data))
 	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func (db *DB) NewUpload(
+	ctx context.Context,
+	key string,
+  file []byte,
+	name string,
+	mimeType string,
+) (bool, *time.Time) {
+	query := `
+		INSERT INTO file_store (file, file_name, mime_type, key)
+		VALUES ($1, $2, $3, $4)
+		RETURNING created_at;
+	`
+	var createdAt time.Time
+	err := Postgres.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
+	if err != nil {
+		utils.Error.Println("Error scanning upload", err)
+		return false, nil
+	}
+
+	return true, &createdAt
+}
+
+func (db *DB) GetFileByKey(
+	ctx context.Context,
+	key string,
+) ([]byte, string, string, *time.Time, error) {
+	query := `
+		SELECT file, mime_type, file_name, created_at
+		FROM file_store
+		WHERE key = $1
+	`
+
+	var content []byte
+	var mimeType string
+	var fileName string
+	var createdAt time.Time
+
+	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(
+		&content,
+		&mimeType,
+		&fileName,
+		&createdAt,
+	)
+	if err != nil {
+		return nil, "", "", nil, err
+	}
+
+	return content, mimeType, fileName, &createdAt, nil
+}
+
+func (db *DB) DeleteFileByKey(
+	ctx context.Context,
+	key string,
+) bool {
+	query := `
+		DELETE FROM file_store
+		WHERE key = $1
+	`
+
+	_, err := Postgres.Pool.Exec(ctx, query, key)
+	return err == nil
+}
+
+func (db *DB) GetUploadCreatedAt(
+	ctx context.Context,
+	key string,
+) (*time.Time, error) {
+	query := `
+		SELECT created_at
+		FROM file_store
+		WHERE key = $1
+	`
+
+	var createdAt time.Time
+	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&createdAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &createdAt, nil
 }

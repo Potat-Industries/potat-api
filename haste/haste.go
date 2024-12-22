@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +19,13 @@ import (
 
 	"github.com/gorilla/mux"
 )
+
+var allowedTypes = []string{
+	"text/plain",
+	"text/markdown",
+	"text/x-markdown",
+	"application/json",
+}
 
 var (
 	keyLength  int
@@ -37,8 +46,8 @@ func init() {
 	router.HandleFunc("/raw/{id}", handleGetRaw).Methods(http.MethodGet)
 	router.HandleFunc("/documents", handlePost).Methods(http.MethodPost)
 	router.HandleFunc("/documents/{id}", handleGet).Methods(http.MethodGet)
-	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {	
-		if _, exists := staticFiles[r.URL.Path]; !exists { 
+	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, exists := staticFiles[r.URL.Path]; !exists {
 			r.URL.Path = "/"
 		}
 		http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
@@ -49,7 +58,7 @@ func StartServing(config common.Config) error {
 	if config.Haste.Host == "" || config.Haste.Port == "" {
 		utils.Error.Fatal("Config: Haste host and port must be set")
 	}
-	
+
 	if config.Haste.KeyLength != 0 {
 		keyLength = config.Haste.KeyLength
 	} else {
@@ -84,18 +93,17 @@ func getRedis(ctx context.Context, key string) (string, error) {
 	return data, nil
 }
 
-func setRedis(ctx context.Context, key, data string) error {
-	err := db.Redis.Set(ctx, key, data, 0).Err()
+func setRedis(key, data string) {
+	err := db.Redis.Set(context.Background(), key, data, 0).Err()
 	if err != nil {
-		return err
+		utils.Warn.Printf("Failed to cache document: %v", err)
+		return
 	}
 
-	err = db.Redis.Expire(ctx, key, time.Hour).Err()
+	err = db.Redis.Expire(context.Background(), key, time.Hour).Err()
 	if err != nil {
-		return err
+		utils.Warn.Printf("Failed to cache document: %v", err)
 	}
-
-	return nil
 }
 
 func loadStaticFilePath() string {
@@ -152,10 +160,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = setRedis(r.Context(), key, data)
-	if err != nil {
-		utils.Warn.Printf("Failed to cache document: %v", err)
-	}
+	go setRedis(key, data)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Cache-Hit", "MISS")
@@ -186,10 +191,7 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = setRedis(r.Context(), key, data)
-	if err != nil {
-		utils.Warn.Printf("Failed to cache document: %v", err)
-	}
+	go setRedis(key, data)
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Cache-Hit", "MISS")
@@ -211,6 +213,19 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		utils.Warn.Println("Error parsing media type: ", err)
+		http.Error(w, "Invalid content type", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	if !slices.Contains(allowedTypes, mediaType) {
+		utils.Warn.Println("Invalid media type: ", mediaType)
+		http.Error(w, "Invalid media type", http.StatusUnsupportedMediaType)
+		return
+	}
 
 	if len(body) == 0 {
 		utils.Warn.Println("Empty body")

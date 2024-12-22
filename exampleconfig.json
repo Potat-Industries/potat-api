@@ -10,6 +10,7 @@
     "port": ""
   },
   "uploader": {
+    "authkey": "",
     "enabled": false,
     "port": "",
     "host": "localhost"
