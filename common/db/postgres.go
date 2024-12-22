@@ -91,6 +91,13 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) {
 	return dbConfig, nil
 }
 
+func (db *DB) CheckTableExists(createTable string) {
+	_, err := db.Pool.Exec(context.Background(), createTable)
+	if err != nil {
+		utils.Error.Fatalf("Failed to create table: %v", err)
+	}
+}
+
 func (db *DB) Ping(ctx context.Context) error {
 	return db.Pool.Ping(ctx)
 }

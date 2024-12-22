@@ -41,9 +41,9 @@ func main() {
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(
-		shutdownChan, 
-		os.Interrupt, 
-		syscall.SIGTERM, 
+		shutdownChan,
+		os.Interrupt,
+		syscall.SIGTERM,
 		syscall.SIGINT,
 	)
 
@@ -95,9 +95,12 @@ func main() {
 		utils.Warn.Println("Shutdown requested...")
 	}
 
-	// Do something i guess
-
-	utils.Warn.Println("Shutting down...")
+	db.Clickhouse.Close()
+	utils.Warn.Println("Clickhouse connection closed")
+	db.Postgres.Pool.Close()
+	utils.Warn.Println("Postgres connection closed")
+	db.Redis.Close()
+	utils.Warn.Println("Redis connection closed")
 }
 
 func runWithTimeout(
@@ -129,7 +132,7 @@ func initPostgres(config common.Config, ctx context.Context) {
 	err := db.InitPostgres(config)
 	if err != nil {
 		utils.Error.Panicln("Failed initializing Postgres", err)
-	} 
+	}
 	err = runWithTimeout(db.Postgres.Ping, ctx)
 	if err != nil {
 		utils.Error.Panicln("Failed pinging Postgres", err)
@@ -159,7 +162,7 @@ func initClickhouse(config common.Config, ctx context.Context) {
 	err = runWithTimeout(db.Clickhouse.Ping, ctx)
 	if err != nil {
 		utils.Error.Panicln("Failed pinging Clickhouse", err)
-	} 
+	}
 	utils.Info.Println("Clickhouse initialized")
 }
 

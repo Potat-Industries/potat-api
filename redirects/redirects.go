@@ -1,18 +1,25 @@
 package redirects
 
 import (
+	"time"
+	"strings"
 	"context"
 	"net/http"
-	"strings"
-	"time"
 
-	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
+	"potat-api/api/middleware"
 
 	"github.com/gorilla/mux"
 )
+
+const createTable = `
+	CREATE TABLE IF NOT EXISTS url_redirects (
+		key VARCHAR(9) PRIMARY KEY,
+		url VARCHAR(500) NOT NULL
+	);
+`
 
 var server *http.Server
 var router *mux.Router
@@ -38,6 +45,8 @@ func StartServing(config common.Config) error {
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	db.Postgres.CheckTableExists(createTable)
 
 	utils.Info.Printf("Redirects listening on %s", server.Addr)
 

@@ -19,6 +19,17 @@ import (
 
 const maxFileSize = 20971520 // 20MB
 
+const createTable = `
+	CREATE TABLE IF NOT EXISTS file_store (
+		key VARCHAR(50) PRIMARY KEY,
+		file BYTEA NOT NULL,
+		file_name VARCHAR(50),
+		mime_type VARCHAR(50) NOT NULL,
+		expires_at TIMESTAMP,
+		created_at TIMESTAMP DEFAULT NOW() NOT NULL
+	);
+`
+
 var server *http.Server
 var router *mux.Router
 var hasher func(string) string
@@ -33,11 +44,13 @@ type Upload struct {
 func init() {
 	router = mux.NewRouter()
 
-	limiter := middleware.NewRateLimiter(200, 1 * time.Minute)
 	router.Use(middleware.LogRequest)
-	router.Use(limiter)
+	router.Use(middleware.NewRateLimiter(200, 1 * time.Minute))
 	router.HandleFunc("/{key}", handleGet).Methods(http.MethodGet)
-	router.HandleFunc("/delete/{key}/{hash}", handleDelete).Methods(http.MethodGet)
+
+	deleteRouter := router.PathPrefix("/delete").Subrouter()
+	deleteRouter.Use(middleware.NewRateLimiter(15, 1 * time.Minute))
+	deleteRouter.HandleFunc("/{key}/{hash}", handleDelete).Methods(http.MethodGet)
 }
 
 func StartServing(config common.Config) error {
@@ -60,6 +73,8 @@ func StartServing(config common.Config) error {
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	db.Postgres.CheckTableExists(createTable)
 
 	utils.Info.Printf("Uploader listening on %s", server.Addr)
 

@@ -20,6 +20,16 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const createTable = `
+	CREATE TABLE IF NOT EXISTS haste (
+		key char(32) UNIQUE NOT NULL,
+		content BYTEA NOT NULL,
+		access_count INT DEFAULT 1 NOT NULL,
+		source TEXT default 'potatbotat',
+		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+`
+
 var allowedTypes = []string{
 	"text/plain",
 	"text/markdown",
@@ -72,6 +82,8 @@ func StartServing(config common.Config) error {
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	db.Postgres.CheckTableExists(createTable)
 
 	utils.Info.Printf("Haste listening on %s",server.Addr)
 
