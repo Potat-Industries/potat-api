@@ -34,6 +34,7 @@ var server *http.Server
 var router *mux.Router
 var hasher func(string) string
 var cacheDuration time.Duration
+var keyLength = 6
 
 type Upload struct {
 	Key string 					`json:"key"`
@@ -58,6 +59,7 @@ func StartServing(config common.Config) error {
 		utils.Error.Fatal("Config: Uploader host and port must be set")
 	}
 
+	keyLength = config.Haste.KeyLength
 	cacheDuration = 30 * time.Minute // TODO: Make this configurable?
 	hasher = getHashGenerator(config.Uploader.AuthKey)
 
@@ -120,7 +122,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	mimeType := http.DetectContentType(fileData)
 
-	key, err := utils.RandomString(6)
+	key, err := utils.RandomString(keyLength)
 	if err != nil {
 		utils.Error.Printf("Error generating key: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
