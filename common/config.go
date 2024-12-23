@@ -24,6 +24,7 @@ type RabbitMQConfig struct {
 	Port     string `json:"port"`
 	User     string `json:"user"`
 	Password string `json:"password"`
+	Enabled	 bool   `json:"enabled"`
 }
 
 type HasteConfig struct {

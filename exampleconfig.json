@@ -27,6 +27,7 @@
     "port": ""
   },
   "rabbitmq": {
+    "enabled": true,
     "host": "localhost",
     "port": "",
     "user": "",

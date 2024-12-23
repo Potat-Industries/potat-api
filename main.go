@@ -32,7 +32,9 @@ func main() {
 
 	if config.API.Enabled {
 		initClickhouse(*config, ctx)
+	}
 
+	if config.RabbitMQ.Enabled {
 		cleanup := initRabbitMQ(*config, ctx)
 		defer cleanup()
 	}
@@ -95,8 +97,11 @@ func main() {
 		utils.Warn.Println("Shutdown requested...")
 	}
 
-	db.Clickhouse.Close()
-	utils.Warn.Println("Clickhouse connection closed")
+	if config.API.Enabled {
+		db.Clickhouse.Close()
+		utils.Warn.Println("Clickhouse connection closed")
+	}
+
 	db.Postgres.Pool.Close()
 	utils.Warn.Println("Postgres connection closed")
 	db.Redis.Close()

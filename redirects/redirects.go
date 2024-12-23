@@ -60,12 +60,7 @@ func Stop() {
 }
 
 func setRedis(key, data string) error {
-	err := db.Redis.Set(context.Background(), key, data, 0).Err()
-	if err != nil {
-		utils.Error.Printf("Error caching redirect: %v", err)
-	}
-
-	err = db.Redis.Expire(context.Background(), key, time.Hour).Err()
+	err := db.Redis.SetEx(context.Background(), key, data, time.Hour).Err()
 	if err != nil {
 		utils.Error.Printf("Error caching redirect: %v", err)
 	}
@@ -75,7 +70,7 @@ func setRedis(key, data string) error {
 
 func getRedis(ctx context.Context, key string) (string, error) {
 	data, err := db.Redis.Get(ctx, key).Result()
-	if err != nil {
+	if err != nil && err != db.RedisErrNil {
 		return "", err
 	}
 
@@ -92,7 +87,7 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 
 	cache, err := getRedis(r.Context(), key)
 	if err == nil && cache != "" {
-		r.Header.Set("X-Cache-Hit", "HIT")
+		w.Header().Set("X-Cache-Hit", "HIT")
 		http.Redirect(w, r, cache, http.StatusSeeOther)
 		return
 	}
