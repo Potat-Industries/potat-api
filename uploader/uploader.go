@@ -88,22 +88,7 @@ func Stop() {
 }
 
 func setRedis(key string, data []byte) {
-	luaScript := `
-		local key = KEYS[1]
-		local data = ARGV[1]
-
-		redis.call("SET", key, data)
-		return redis.call("EXPIRE", key, ARGV[2])
-	`
-
-	err := db.Redis.Eval(
-		context.Background(),
-		luaScript,
-		[]string{key},
-		data,
-		cacheDuration.Seconds(),
-	).Err()
-
+	err := db.Redis.SetEx(context.Background(), key, data, cacheDuration).Err()
 	if err != nil {
 		utils.Warn.Printf("Failed to cache document: %v", err)
 	}
@@ -206,6 +191,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Cache-Hit", "HIT")
 		w.WriteHeader(http.StatusOK)
 		w.Write(cache)
+		return
 	}
 
 	data, mimeType, name, _, err := db.Postgres.GetFileByKey(r.Context(), key)
