@@ -1,16 +1,16 @@
 package common
 
 type Config struct {
-	Loops      LoopsConfig		`json:"loops"`
-	API        APIConfig			`json:"api"`
-	Redirects  APIConfig			`json:"redirects"`
-	Uploader   APIConfig			`json:"uploader"`
-	RabbitMQ   RabbitMQConfig	`json:"rabbitmq"`
-	Haste			 HasteConfig		`json:"haste"`
-	Prometheus APIConfig			`json:"prometheus"`
-	Postgres   SQLConfig   		`json:"postgres"`
-	Clickhouse SQLConfig 			`json:"clickhouse"`
+	Postgres   SQLConfig      `json:"postgres"`
+	Clickhouse SQLConfig      `json:"clickhouse"`
+	API        APIConfig      `json:"api"`
+	Redirects  APIConfig      `json:"redirects"`
+	Uploader   APIConfig      `json:"uploader"`
+	Prometheus APIConfig      `json:"prometheus"`
 	Redis      RedisConfig    `json:"redis"`
+	RabbitMQ   RabbitMQConfig `json:"rabbitmq"`
+	Haste      HasteConfig    `json:"haste"`
+	Loops      LoopsConfig    `json:"loops"`
 }
 
 type LoopsConfig struct {
@@ -18,10 +18,10 @@ type LoopsConfig struct {
 }
 
 type APIConfig struct {
-	Enabled bool 		`json:"enabled"`
-	Host string  		`json:"host"`
-	Port string  		`json:"port"`
-	AuthKey string 	`json:"authkey,omitempty"`
+	Host    string `json:"host"`
+	Port    string `json:"port"`
+	AuthKey string `json:"authkey,omitempty"`
+	Enabled bool   `json:"enabled"`
 }
 
 type RabbitMQConfig struct {
@@ -29,14 +29,14 @@ type RabbitMQConfig struct {
 	Port     string `json:"port"`
 	User     string `json:"user"`
 	Password string `json:"password"`
-	Enabled	 bool   `json:"enabled"`
+	Enabled  bool   `json:"enabled"`
 }
 
 type HasteConfig struct {
-	Enabled 	bool 	 `json:"enabled"`
-	Host 			string `json:"host"`
-	Port		  string `json:"port"`
-	KeyLength int		 `json:"keyLength"`
+	Host      string `json:"host"`
+	Port      string `json:"port"`
+	KeyLength int    `json:"keyLength"`
+	Enabled   bool   `json:"enabled"`
 }
 
 type SQLConfig struct {
