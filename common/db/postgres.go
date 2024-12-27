@@ -43,6 +43,7 @@ func InitPostgres(config common.Config) error {
 	}
 
 	Postgres = &DB{Pool: pool}
+
 	return nil
 }
 

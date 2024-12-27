@@ -1,10 +1,16 @@
 package db
 
 import (
+	"context"
 	"potat-api/common"
+	"potat-api/common/utils"
 
 	"github.com/redis/go-redis/v9"
 )
+
+type RedisClient struct {
+	*redis.Client
+}
 
 var (
 	Redis *redis.Client
@@ -31,4 +37,26 @@ func InitRedis(config common.Config) error {
 	Redis = redis.NewClient(options)
 
 	return nil
+}
+
+func Scan(
+	ctx context.Context,
+	match string,
+	count int64,
+	cursor uint64,
+) ([]string, error) {
+	matches := make([]string, 0)
+
+	for cursor != 0 {
+		keys, next, err := Redis.Scan(ctx, cursor, match, count).Result()
+		if err != nil {
+			utils.Error.Println("Failed scanning keys", err)
+			return nil, err
+		}
+
+		matches = append(matches, keys...)
+		cursor = next
+	}
+
+	return matches, nil
 }

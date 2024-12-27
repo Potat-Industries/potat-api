@@ -1,4 +1,7 @@
 {
+  "loops": {
+    "enabled": true
+  },
   "api": {
     "enabled": false,
     "host": "localhost",

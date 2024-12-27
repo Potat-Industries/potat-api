@@ -39,6 +39,10 @@ func main() {
 		defer cleanup()
 	}
 
+	if config.Loops.Enabled {
+		go db.StartLoops(*config)
+	}
+
 	utils.Info.Println("Startup complete, serving APIs...")
 
 	shutdownChan := make(chan os.Signal, 1)

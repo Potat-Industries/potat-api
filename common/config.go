@@ -1,6 +1,7 @@
 package common
 
 type Config struct {
+	Loops      LoopsConfig		`json:"loops"`
 	API        APIConfig			`json:"api"`
 	Redirects  APIConfig			`json:"redirects"`
 	Uploader   APIConfig			`json:"uploader"`
@@ -10,6 +11,10 @@ type Config struct {
 	Postgres   SQLConfig   		`json:"postgres"`
 	Clickhouse SQLConfig 			`json:"clickhouse"`
 	Redis      RedisConfig    `json:"redis"`
+}
+
+type LoopsConfig struct {
+	Enabled bool `json:"enabled"`
 }
 
 type APIConfig struct {
