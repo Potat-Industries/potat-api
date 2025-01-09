@@ -1,8 +1,10 @@
 package utils
 
 import (
-	"os"
+	"fmt"
 	"log"
+	"os"
+	"time"
 
 	"github.com/fatih/color"
 )
@@ -12,43 +14,85 @@ type Logger struct {
 	level LogLevel
 }
 
-type LogLevel color.Attribute
-
-const (
-    INFO  = color.FgHiGreen
-    DEBUG	= color.FgCyan
-    WARN 	= color.FgYellow
-    ERROR = color.FgHiRed
-)
-
-func New(prefix string, level LogLevel) *Logger {
-	return &Logger{
-		log.New(os.Stdout, prefix + " ", log.Ldate|log.Ltime|log.Lmicroseconds),
-		level,
-	}
-}
-
-func (l *Logger) Println(v ...interface{}) {
-	l.Output(2, color.New(color.Attribute(l.level)).Sprint(v...))
-}
-
-func (l *Logger) Panicln(v ...interface{}) {
-	l.Output(2, color.New(color.Attribute(l.level)).Sprint(v...))
-	panic(v)
-}
-
-func (l *Logger) Printf(format string, v ...interface{}) {
-	l.Output(2, color.New(color.Attribute(l.level)).Sprintf(format, v...))
-}
-
-func (l *Logger) Panicf(format string, v ...interface{}) {
-	l.Output(2, color.New(color.Attribute(l.level)).Sprintf(format, v...))
-	panic(v)
+type LogLevel struct {
+	text color.Attribute
+	tag color.Attribute
 }
 
 var (
-	Info 	= New(color.New(color.BgHiGreen).Sprint(" INFO "), LogLevel(INFO))
-	Warn	= New(color.New(color.BgYellow).Sprint(" WARN "), LogLevel(WARN))
-	Debug	= New(color.New(color.BgCyan).Sprint(" DEBUG "), LogLevel(DEBUG))
-	Error	= New(color.New(color.BgHiRed).Sprint(" ERROR "), LogLevel(ERROR))
+	INFO  = LogLevel{text: color.FgHiGreen, tag: color.BgHiGreen}
+	DEBUG	= LogLevel{text: color.FgCyan, tag: color.BgCyan}
+	WARN 	= LogLevel{text: color.FgYellow, tag: color.BgYellow}
+	ERROR = LogLevel{text: color.FgRed, tag: color.BgRed}
+)
+
+func init() {
+	color.NoColor = false
+}
+
+func New(level LogLevel) *Logger {
+	return &Logger{
+		Logger: log.New(os.Stdout, "", 0),
+		level:  level,
+	}
+}
+
+func getLocalTime() string {
+	loc, _ := time.LoadLocation("America/Anchorage")
+	return time.Now().In(loc).Format("01/02/2006 15:04:05.999999")
+}
+
+func (l *Logger) toOutput(format string, v ...interface{}) {
+	var message string
+
+	timeString := getLocalTime()
+	if format != "" {
+		message = color.New(color.Attribute(l.level.text)).Sprintf(format, v...)
+	} else {
+		message = color.New(color.Attribute(l.level.text)).Sprint(v...)
+	}
+
+	tag := color.New(color.Attribute(l.level.tag)).Sprintf(" %s ", l.levelString())
+	output := fmt.Sprintf("API %s %s %s", timeString, tag, message)
+
+	l.Output(2, output)
+}
+
+func (l *Logger) Println(v ...interface{}) {
+	l.toOutput("", v...)
+}
+
+func (l *Logger) Printf(format string, v ...interface{}) {
+	l.toOutput(format, v...)
+}
+
+func (l *Logger) Panicln(v ...interface{}) {
+	l.toOutput("", v...)
+	panic(v)
+}
+
+func (l *Logger) Panicf(format string, v ...interface{}) {
+	l.toOutput(format, v...)
+	panic(v)
+}
+
+func (l *Logger) levelString() string {
+	switch l.level {
+	case INFO:
+		return "INFO"
+	case DEBUG:
+		return "DEBUG"
+	case WARN:
+		return "WARN"
+	case ERROR:
+		return "ERROR"
+	}
+	return ""
+}
+
+var (
+	Info 	= New(LogLevel(INFO))
+	Warn	= New(LogLevel(WARN))
+	Debug	= New(LogLevel(DEBUG))
+	Error	= New(LogLevel(ERROR))
 )
