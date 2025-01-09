@@ -46,7 +46,7 @@ func LogRequest(next http.Handler) http.Handler {
 
 		// Ignore chatterino link resolver xd
 		agent := r.UserAgent()
-		if strings.HasPrefix("chatterino-api-cache", agent) {
+		if strings.HasPrefix(agent, "chatterino-api-cache") {
 			return
 		}
 

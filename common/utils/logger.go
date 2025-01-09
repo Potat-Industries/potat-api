@@ -39,7 +39,9 @@ func New(level LogLevel) *Logger {
 
 func getLocalTime() string {
 	loc, _ := time.LoadLocation("America/Anchorage")
-	return time.Now().In(loc).Format("01/02/2006 15:04:05.999999")
+	now := time.Now().In(loc)
+
+	return now.Format("01/02/2006 15:04:05") + fmt.Sprintf(".%06d", now.Nanosecond()/1000)
 }
 
 func (l *Logger) toOutput(format string, v ...interface{}) {
