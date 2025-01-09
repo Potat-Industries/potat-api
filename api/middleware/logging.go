@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"potat-api/common/utils"
@@ -43,6 +44,12 @@ func LogRequest(next http.Handler) http.Handler {
 			cachehit,
 		)
 
+		// Ignore chatterino link resolver xd
+		agent := r.UserAgent()
+		if strings.HasPrefix("chatterino-api-cache", agent) {
+			return
+		}
+
 		line := fmt.Sprintf(
 			"Host: %s | %s %s | Cache %s | Status: %d | Duration: %v | User-Agent: %s",
 		  	r.Host,
@@ -51,7 +58,7 @@ func LogRequest(next http.Handler) http.Handler {
 			cachehit,
 			loggingRW.statusCode,
 			time.Since(startTime),
-			r.UserAgent(),
+			agent,
 		)
 
 		if loggingRW.statusCode >= 500 {
