@@ -1,6 +1,6 @@
 # potat-api
 
-This repository serves multiple purposes: 
+This repository serves multiple purposes:
 - A public hastebin server,
 - A public url shortening server,
 - A private file hosting server,
