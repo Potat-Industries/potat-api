@@ -1,13 +1,18 @@
 package db
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"time"
 
 	"potat-api/common"
+	"potat-api/common/http"
 	"potat-api/common/utils"
 
 	"github.com/robfig/cron/v3"
@@ -15,24 +20,38 @@ import (
 
 var (
 	maxFiles = 10
-	dumpPath = "/..."
+	dumpPath = "./dump"
+	dbName   = ""
+	dbUser   = ""
+	dbHost   = ""
+	pgPassword = ""
 )
 
 func StartLoops(config common.Config) {
-	go decrementDuels()
-	go deleteOldUploads()
-	go updateAggregateTable()
-	// go backupPostgres() TODO
-	// go backupClickhouse()
+	dbName = config.Postgres.Database
+	dbUser = config.Postgres.User
+	dbHost = config.Postgres.Host
+	pgPassword = config.Postgres.Password
 
 	c := cron.New()
 	c.AddFunc("@hourly", updateHourlyUsage)
 	c.AddFunc("@daily", updateDailyUsage)
 	c.AddFunc("@weekly", updateWeeklyUsage)
+	c.AddFunc("0 * * * *", validateTokens)
+	c.AddFunc("*/5 * * * *", updateColorView)
+	c.AddFunc("*/5 * * * *", updateBadgeView)
+	c.AddFunc("0 */12 * * *", backupPostgres)
 
 	c.Start()
 
 	defer c.Stop()
+
+
+	// go backupClickhouse()
+	go backupPostgres()
+	go decrementDuels()
+	go deleteOldUploads()
+	go updateAggregateTable()
 }
 
 func decrementDuels() {
@@ -145,36 +164,242 @@ func updateWeeklyUsage() {
 	utils.Debug.Println("Updated weekly usage")
 }
 
+func updateColorView() {
+	query := `
+		INSERT INTO potatbotat.twitch_color_stats
+		SELECT
+			color,
+			COUNT(DISTINCT user_id) AS user_count,
+			(COUNT(DISTINCT user_id) * 100.0) / (
+				SELECT COUNT(user_id)
+				FROM potatbotat.twitch_colors
+			) AS percentage,
+			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank
+		FROM potatbotat.twitch_colors FINAL
+		GROUP BY color;
+	`
+
+	_, err := Postgres.Pool.Exec(context.Background(), query)
+	if err != nil {
+		utils.Error.Println("Error updating color view", err)
+	}
+
+	utils.Debug.Println("Updated colors view")
+}
+
+func updateBadgeView() {
+	query := `
+		INSERT INTO potatbotat.twitch_badge_stats
+		SELECT
+			badge,
+			COUNT(DISTINCT user_id) AS user_count,
+			(user_count * 100.) / (
+				SELECT COUNT(user_id)
+				FROM potatbotat.twitch_badges
+			) AS percentage,
+			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank
+		FROM potatbotat.twitch_badges FINAL
+		GROUP BY badge;
+	`
+
+	_, err := Postgres.Pool.Exec(context.Background(), query)
+	if err != nil {
+		utils.Error.Println("Error updating badge view", err)
+	}
+
+	utils.Debug.Println("Updated badges view")
+}
+
+func validateTokens() {
+	query := `
+		SELECT access_token, platform_id FROM connection_oauth WHERE platform = 'TWITCH';
+	`
+
+	rows, err := Postgres.Pool.Query(context.Background(), query)
+	if err != nil {
+		utils.Error.Println("Error getting tokens", err)
+		return
+	}
+
+	defer rows.Close()
+
+	var validated = 0
+	var deleted = 0
+
+	for rows.Next() {
+		var con common.PlatformOauth
+
+		err := rows.Scan(&con.AccessToken, &con.PlatformID)
+		if err != nil {
+				utils.Error.Println("Error scanning token:", err)
+				continue
+		}
+
+		if con.AccessToken == "" {
+			utils.Error.Println("Empty token for user_id", con.PlatformID)
+			continue
+		}
+
+		valid, err := helix.ValidateToken(con.AccessToken)
+		if err != nil {
+			utils.Error.Println("Error validating token", err)
+			continue
+		}
+
+		if !valid {
+			deleteQuery := `
+				DELETE FROM connection_oauth
+				WHERE platform_id = $1
+				AND platform = $2
+				AND access_token = $3;
+			`
+
+			_, err := Postgres.Pool.Exec(
+				context.Background(),
+				deleteQuery,
+				con.PlatformID,
+				"TWITCH",
+				con.AccessToken,
+			)
+			if err != nil {
+				utils.Error.Println("Error deleting token for user_id", con.PlatformID, ":", err)
+			} else {
+				deleted++
+			}
+		}
+
+		time.Sleep(200 * time.Millisecond)
+		validated++
+	}
+
+	utils.Info.Printf(
+		"Validated %d helix tokens, and deleted %d expired tokens",
+		validated,
+		deleted,
+	)
+}
+
+func sortFiles(files []string) func(i, j int) bool {
+	return func (i, j int) bool {
+		fileI, errI := os.Stat(filepath.Join(dumpPath, files[i]))
+		if errI != nil {
+			return false
+		}
+
+		fileJ, errJ := os.Stat(filepath.Join(dumpPath, files[j]))
+		if errJ != nil {
+			return true
+		}
+
+		return fileI.ModTime().Before(fileJ.ModTime())
+	}
+}
+
 func deleteOldDumps(files []string, max int) {
+	utils.Debug.Printf("Checking for old dump files, current count: %d, max: %d", len(files), max)
 	if len(files) <= max {
 		return
 	}
 
-	sort.Slice(files, func(i, j int) bool {
-		fileI, _ := os.Stat(filepath.Join(dumpPath, files[i]))
-		fileJ, _ := os.Stat(filepath.Join(dumpPath, files[j]))
-		return fileI.ModTime().Before(fileJ.ModTime())
-	})
+	sort.Slice(files, sortFiles(files))
 
-	filesToDelete := files[:len(files)-max + 1]
+	filesToDelete := files[:len(files) - max + 1]
 	for _, file := range filesToDelete {
-		err := os.Remove(filepath.Join(dumpPath, file))
+		err := os.Remove(file)
 		if err != nil {
-			utils.Error.Println("Failed deleting dump file", err)
+			utils.Error.Println("Failed deleting dump file ", err)
 		}
 	}
 
 	utils.Info.Printf("Deleted %d old dump files", len(filesToDelete))
 }
 
-func BackupPostgres() {
+func backupPostgres() {
+	utils.Debug.Println("Backing up Postgres")
+
+	if err := os.MkdirAll(dumpPath, os.ModePerm); err != nil {
+		utils.Error.Println("Failed to create backup folder:", err)
+		return
+	}
+
 	files, err := filepath.Glob(filepath.Join(dumpPath, "*.sql.gz"))
 	if err != nil {
-		utils.Error.Println("Failed listing dump files", err)
+		utils.Error.Println("Failed to list dump files:", err)
+		return
 	}
 
 	deleteOldDumps(files, maxFiles)
 
-	// backup compressed dump
+	filePath := filepath.Join(dumpPath, fmt.Sprintf("data_%d.sql.gz", time.Now().Unix()))
+	cmd := exec.Command("sh", "-c", fmt.Sprintf(
+		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | gzip > %s",
+		pgPassword, dbName, dbUser, dbHost, filePath,
+	))
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	start := time.Now()
+	if err := cmd.Run(); err != nil {
+		utils.Error.Println("Failed to execute pg_dump:", err, stderr.String())
+		return
+	}
+	duration := time.Since(start)
+
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		utils.Error.Println("Failed to get backup file size:", err)
+		return
+	}
+
+	backupSize := float64(stat.Size()) / (1024 * 1024 * 1024)
+
+	dbSize, err := getDatabaseSize(dbName)
+	if err != nil {
+		utils.Error.Println("Failed to get database size:", err)
+		return
+	}
+
+	message := fmt.Sprintf(
+		"Database back-up successful in %s - DB size: %s - Backup size: %.2f GB",
+		utils.Humanize(duration, 2),
+		dbSize,
+		backupSize,
+	)
+
+  jsonMessage, err := json.Marshal(message)
+	if err != nil {
+		utils.Error.Println("Failed to JSON stringify message:", err)
+		utils.Info.Println(message)
+		return
+	}
+
+	queueMessage := fmt.Sprintf("postgres-backup:%s", string(jsonMessage))
+	err = utils.PublishToQueue(context.Background(), queueMessage, 1*time.Minute)
+	if err != nil {
+		utils.Error.Println("Failed to publish to queue:", err)
+		return
+	}
+
+	utils.Info.Println(message)
 }
 
+func getDatabaseSize(dbName string) (string, error) {
+	query := `SELECT pg_size_pretty(pg_database_size($1)) as size`
+	rows, err := Postgres.Pool.Query(context.Background(), query, dbName)
+	if err != nil {
+		return "", err
+	}
+
+	defer rows.Close()
+
+	if rows.Next() {
+		var size string
+		if err := rows.Scan(&size); err != nil {
+			return "", err
+		}
+		return size, nil
+	}
+
+	return "", fmt.Errorf("no rows returned for database size query")
+}
