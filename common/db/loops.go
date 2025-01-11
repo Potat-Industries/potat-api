@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"potat-api/common"
-	"potat-api/common/http"
 	"potat-api/common/utils"
 
 	"github.com/robfig/cron/v3"
@@ -48,7 +47,6 @@ func StartLoops(config common.Config) {
 
 
 	// go backupClickhouse()
-	go backupPostgres()
 	go decrementDuels()
 	go deleteOldUploads()
 	go updateAggregateTable()
@@ -240,7 +238,7 @@ func validateTokens() {
 			continue
 		}
 
-		valid, err := helix.ValidateToken(con.AccessToken)
+		valid, err := utils.ValidateHelixToken(con.AccessToken)
 		if err != nil {
 			utils.Error.Println("Error validating token", err)
 			continue
