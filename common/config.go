@@ -1,5 +1,19 @@
 package common
 
+var UserLevels = struct {
+	Blacklisted int
+	Admin       int
+	Mod         int
+	User        int
+	Developer   int
+} {
+	Blacklisted: 0,
+	Admin:       1,
+	Mod:         2,
+	User:        3,
+	Developer:   4,
+}
+
 type Config struct {
 	Postgres   SQLConfig      `json:"postgres"`
 	Clickhouse SQLConfig      `json:"clickhouse"`
@@ -11,6 +25,12 @@ type Config struct {
 	RabbitMQ   RabbitMQConfig `json:"rabbitmq"`
 	Haste      HasteConfig    `json:"haste"`
 	Loops      LoopsConfig    `json:"loops"`
+	Twitch     TwitchConfig   `json:"twitch"`
+}
+
+type TwitchConfig struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
 }
 
 type LoopsConfig struct {

@@ -65,7 +65,7 @@ func StartServing(config common.Config) error {
 
 	authedRoute := router.PathPrefix("/").Subrouter()
 	authedRoute.HandleFunc("/upload", handleUpload).Methods(http.MethodPost)
-	authedRoute.Use(middleware.SetAuthMiddleware(config.Uploader.AuthKey))
+	authedRoute.Use(middleware.SetStaticAuthMiddleware(config.Uploader.AuthKey))
 	authedRoute.Use(middleware.NewRateLimiter(25, 1 * time.Minute))
 
 	server = &http.Server{

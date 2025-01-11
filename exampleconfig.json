@@ -1,4 +1,8 @@
 {
+  "twitch": {
+    "client_id": "asdf1234",
+    "client_secret": "asdf1234"
+  },
   "loops": {
     "enabled": true
   },
