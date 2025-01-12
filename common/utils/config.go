@@ -7,19 +7,27 @@ import (
 	"potat-api/common"
 )
 
+var config *common.Config
+
 func LoadConfig() *common.Config {
+	if config != nil {
+		return config
+	}
+
 	data, err := loadOrCopy()
 	if err != nil {
 		Error.Panicln("Failed loading config", err)
 	}
 
-	var config common.Config
-	err = json.Unmarshal(data, &config)
+	var configuration common.Config
+	err = json.Unmarshal(data, &configuration)
 	if err != nil {
 		Error.Panicln("Failed unmarshaling config", err)
 	}
 
-	return &config
+	config = &configuration
+
+	return config
 }
 
 func loadOrCopy() ([]byte, error) {
