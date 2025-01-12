@@ -1,6 +1,9 @@
 package common
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Platforms string
 
@@ -11,14 +14,24 @@ const (
 	STV     Platforms = "STV"
 )
 
+type PermissionLevel uint8
+
+const (
+	DEVELOPER 	PermissionLevel = 4
+	ADMIN     	PermissionLevel = 3
+	MOD       	PermissionLevel = 2
+	USER     		PermissionLevel = 1
+	BLACKLISTED	PermissionLevel = 0
+)
+
 type User struct {
-	FirstSeen   time.Time        `json:"first_seen"`
-	Username    string           `json:"username"`
-	Display     string           `json:"display"`
-	Settings    UserSettings     `json:"settings"`
-	Connections []UserConnection `json:"connections,omitempty"`
-	ID          int              `json:"user_id"`
-	Level       int              `json:"level"`
+	FirstSeen   time.Time        	`json:"first_seen"`
+	Username    string           	`json:"username"`
+	Display     string           	`json:"display"`
+	Settings    UserSettings     	`json:"settings"`
+	Connections []UserConnection 	`json:"connections,omitempty"`
+	ID          int              	`json:"user_id"`
+	Level       int              	`json:"level"`
 }
 
 type UserSettings struct {
@@ -30,14 +43,16 @@ type UserSettings struct {
 	IsSelfBot      bool   `json:"is_selfbot"`
 }
 
+type UserMeta = json.RawMessage
+
 type UserConnection struct {
-	Meta     map[string]interface{} `json:"platform_metadata"`
-	Platform Platforms              `json:"platform"`
-	Username string                 `json:"platform_username"`
-	Display  string                 `json:"platform_display"`
-	UserID   string                 `json:"platform_id"`
-	PFP      string                 `json:"platform_pfp"`
-	ID       int                    `json:"user_id"`
+	Meta     UserMeta		`json:"platform_metadata"`
+	Platform Platforms 	`json:"platform"`
+	Username string    	`json:"platform_username"`
+	Display  string    	`json:"platform_display"`
+	UserID   string    	`json:"platform_id"`
+	PFP      string    	`json:"platform_pfp"`
+	ID       int       	`json:"user_id"`
 }
 
 type KickChannelMeta struct {
@@ -52,19 +67,19 @@ type TwitchChannelMeta struct {
 }
 
 type TwitchUserMeta struct {
-	Color string      `json:"color"`
-	Roles TwitchRoles `json:"roles"`
+	Color string      `json:"color,omitempty"`
+	Roles TwitchRoles `json:"roles,omitempty"`
 }
 
 type StvUserMeta struct {
-	PaintID string   `json:"paint_id"`
-	Roles   []string `json:"roles"`
+	PaintID string   `json:"paint_id,omitempty"`
+	Roles   []string `json:"roles,omitempty"`
 }
 
 type TwitchRoles struct {
-	IsStaff     bool `json:"isStaff"`
-	IsPartner   bool `json:"isPartner"`
-	IsAffiliate bool `json:"isAffiliate"`
+	IsStaff     bool `json:"isStaff,omitempty"`
+	IsPartner   bool `json:"isPartner,omitempty"`
+	IsAffiliate bool `json:"isAffiliate,omitempty"`
 }
 
 type Channel struct {
@@ -227,4 +242,13 @@ type PotatoData struct {
 type Redirect struct {
 	Key string `json:"key"`
 	URL string `json:"url"`
+}
+
+type ErrorMessage struct {
+	Message string `json:"message"`
+}
+
+type GenericResponse[T any] struct {
+	Data   *[]T   `json:"data"`
+	Errors *[]ErrorMessage `json:"errors,omitempty"`
 }

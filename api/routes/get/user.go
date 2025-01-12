@@ -1,17 +1,17 @@
 package get
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
+	"time"
+	"sync"
+	"strings"
+	"context"
 	"net/http"
+
 	"potat-api/api"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -89,14 +89,7 @@ type Duel struct {
 	CaughtLosses int `json:"caughtLosses"`
 }
 
-type ErrorMessage struct {
-	Message string `json:"message"`
-}
-
-type UsersResponse struct {
-	Data   *[]UserInfo   `json:"data"`
-	Errors *ErrorMessage `json:"errors,omitempty"`
-}
+type UsersResponse = common.GenericResponse[UserInfo]
 
 type UserInfo struct {
 	User     *common.User       `json:"user"`
@@ -109,20 +102,7 @@ func init() {
 		Path:    "/users/{username}",
 		Method:  http.MethodGet,
 		Handler: getUsers,
-	})
-}
-
-func response(
-	r http.ResponseWriter, 
-	code int, 
-	response UsersResponse,
-	start time.Time,
-) {
-	r.WriteHeader(code)
-	r.Header().Set("Content-Type", "application/json")
-	r.Header().Set("X-Potat-Request-Duration", time.Since(start).String())
-	
-	json.NewEncoder(r).Encode(response)
+	}, false)
 }
 
 func getQuizReady(lastQuiz int) bool {
@@ -226,7 +206,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Postgres.GetChannelByName(ctx, user)
+		data, err := db.Postgres.GetChannelByName(ctx, user, common.Platforms(common.TWITCH))
 		if err != nil && err != db.PostgresNoRows {
 			utils.Warn.Println("Error fetching channel data: ", err)
 		} else {
@@ -307,7 +287,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	wg.Wait()
 
 	potatoes := tidyPotatoInfo(
-		potatData, 
+		potatData,
 		lastPotato,
 		lastCDR,
 		lastTrample,
@@ -333,10 +313,10 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 		res := UsersResponse{
 			Data: &[]UserInfo{},
-			Errors: &ErrorMessage{Message: err},
+			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
-		response(w, http.StatusBadRequest, res, start)
+		api.GenericResponse(w, http.StatusBadRequest, res, start)
 		return
 	}
 
@@ -346,10 +326,10 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 		res := UsersResponse{
 			Data: &[]UserInfo{},
-			Errors: &ErrorMessage{Message: err},
+			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
-		response(w, http.StatusBadRequest, res, start)
+		api.GenericResponse(w, http.StatusBadRequest, res, start)
 		return
 	}
 
@@ -360,7 +340,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 	wg.Add(len(userArray))
 	for _, user := range userArray {
-		go func() {	
+		go func() {
 			defer wg.Done()
 			info := loadUser(r.Context(), user)
 			dataChan <- info
@@ -381,10 +361,10 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 		res := UsersResponse{
 			Data: &dataArray,
-			Errors: &ErrorMessage{Message: err},
+			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
-		response(w, http.StatusNotFound, res, start)
+		api.GenericResponse(w, http.StatusNotFound, res, start)
 		return
 	}
 
@@ -392,5 +372,5 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		Data: &dataArray,
 	}
 
-	response(w, http.StatusOK, res, start)
+	api.GenericResponse(w, http.StatusOK, res, start)
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"potat-api/common"
 	"potat-api/common/db"
+	"potat-api/common/utils"
 	"strings"
 	"time"
 
@@ -56,7 +57,7 @@ func SetDynamicAuthMiddleware() func(http.Handler) http.Handler {
 
 			ok, user := verifyDynamicAuth(token, r.Context())
 			if !ok {
-				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				http.Error(w, http.StatusText(http.StatusTeapot), http.StatusUnauthorized)
 				return
 			}
 
@@ -67,13 +68,16 @@ func SetDynamicAuthMiddleware() func(http.Handler) http.Handler {
 }
 
 func verifyDynamicAuth(token string, ctx context.Context) (bool, *common.User) {
+	token = strings.Replace(token, "Bearer ", "", 1)
 	claims, err := verifyJWT(token)
 	if err != nil {
 		return false, &common.User{}
 	}
 
+
 	user, err := db.Postgres.GetUserByInternalID(ctx, claims.UserID)
 	if err != nil {
+		utils.Warn.Println("Error fetching authenticated user: ", err)
 		return false, &common.User{}
 	}
 
