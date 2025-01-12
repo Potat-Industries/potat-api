@@ -59,13 +59,11 @@ func Stop() {
 	}
 }
 
-func setRedis(key, data string) error {
+func setRedis(key, data string) {
 	err := db.Redis.SetEx(context.Background(), key, data, time.Hour).Err()
 	if err != nil {
 		utils.Error.Printf("Error caching redirect: %v", err)
 	}
-
-	return nil
 }
 
 func getRedis(ctx context.Context, key string) (string, error) {

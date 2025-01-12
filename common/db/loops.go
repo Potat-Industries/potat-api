@@ -33,13 +33,44 @@ func StartLoops(config common.Config) {
 	pgPassword = config.Postgres.Password
 
 	c := cron.New()
-	c.AddFunc("@hourly", updateHourlyUsage)
-	c.AddFunc("@daily", updateDailyUsage)
-	c.AddFunc("@weekly", updateWeeklyUsage)
-	c.AddFunc("0 * * * *", validateTokens)
-	c.AddFunc("*/5 * * * *", updateColorView)
-	c.AddFunc("*/5 * * * *", updateBadgeView)
-	c.AddFunc("0 */12 * * *", backupPostgres)
+
+	var err error
+	_, err = c.AddFunc("@hourly", updateHourlyUsage)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron updateHourlyUsage", err)
+		return
+	}
+	_, err = c.AddFunc("@daily", updateDailyUsage)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron updateDailyUsage", err)
+		return
+	}
+	_, err = c.AddFunc("@weekly", updateWeeklyUsage)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron updateWeeklyUsage", err)
+		return
+	}
+	_, err = c.AddFunc("0 * * * *", validateTokens)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron validateTokens", err)
+		return
+	}
+	_, err = c.AddFunc("*/5 * * * *", updateColorView)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron updateColorView", err)
+		return
+	}
+	_, err = c.AddFunc("*/5 * * * *", updateBadgeView)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron updateBadgeView", err)
+		return
+	}
+	_, err = c.AddFunc("0 */12 * * *", backupPostgres)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron backupPostgres", err)
+		return
+	}
+
 
 	c.Start()
 

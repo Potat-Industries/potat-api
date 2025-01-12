@@ -148,11 +148,15 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
-	json.NewEncoder(w).Encode(Upload{
+	err = json.NewEncoder(w).Encode(Upload{
 		Key: key,
 		URL: response,
 		DeleteHash: hasher(key + createdAt.String()),
 	})
+
+	if err != nil {
+		utils.Error.Printf("Error encoding response: %v", err)
+	}
 }
 
 func handleDelete(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +196,10 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("X-Cache-Hit", "HIT")
 		w.WriteHeader(http.StatusOK)
-		w.Write(cache)
+		_, err = w.Write(cache)
+		if err != nil {
+			utils.Warn.Printf("Failed to write document: %v", err)
+		}
 		return
 	}
 
@@ -206,7 +213,11 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
 	w.Header().Set("Content-Type", mimeType)
-	w.Write(data)
+	_, err = w.Write(data)
+	if err != nil {
+		utils.Error.Printf("Error writing file: %v", err)
+		http.Error(w, "Failed to write file", http.StatusInternalServerError)
+	}
 }
 
 func getHashGenerator(secret string) func(key string) string {

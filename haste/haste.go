@@ -161,7 +161,10 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Cache-Hit", "HIT")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"key": key, "data": cache})
+		err = json.NewEncoder(w).Encode(map[string]string{"key": key, "data": cache})
+		if err != nil {
+			utils.Warn.Println("Failed to write document: ", err)
+		}
 		return
 	}
 
@@ -177,7 +180,10 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Cache-Hit", "MISS")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"key": key, "data": data})
+	err = json.NewEncoder(w).Encode(map[string]string{"key": key, "data": data})
+	if err != nil {
+		utils.Warn.Println("Failed to write document: ", err)
+	}
 }
 
 func handleGetRaw(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +198,10 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("X-Cache-Hit", "HIT")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(cache))
+		_, err = w.Write([]byte(cache))
+		if err != nil {
+			utils.Warn.Println("Failed to write document: ", err)
+		}
 		return
 	}
 
@@ -208,7 +217,10 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Cache-Hit", "MISS")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(data))
+	_, err = w.Write([]byte(data))
+	if err != nil {
+		utils.Warn.Println("Failed to write document: ", err)
+	}
 }
 
 func handlePost(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +273,10 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-  json.NewEncoder(w).Encode(map[string]string{"key": key})
+  err = json.NewEncoder(w).Encode(map[string]string{"key": key})
+	if err != nil {
+		utils.Warn.Println("Failed to write response: ", err)
+	}
 }
 
 func chooseKey(ctx context.Context) (string, error) {

@@ -44,12 +44,12 @@ func getLocalTime() string {
 	return now.Format("01/02/2006 15:04:05") + fmt.Sprintf(".%06d", now.Nanosecond()/1000)
 }
 
-func (l *Logger) toOutput(format string, v ...interface{}) {
+func (l *Logger) toOutput(format *string, v ...interface{}) {
 	var message string
 
 	timeString := getLocalTime()
-	if format != "" {
-		message = color.New(color.Attribute(l.level.text)).Sprintf(format, v...)
+	if format != nil {
+		message = color.New(color.Attribute(l.level.text)).Sprintf(*format, v...)
 	} else {
 		message = color.New(color.Attribute(l.level.text)).Sprint(v...)
 	}
@@ -57,24 +57,24 @@ func (l *Logger) toOutput(format string, v ...interface{}) {
 	tag := color.New(color.Attribute(l.level.tag)).Sprintf(" %s ", l.levelString())
 	output := fmt.Sprintf("API %s %s %s", timeString, tag, message)
 
-	l.Output(2, output)
+	_ = l.Output(2, output)
 }
 
 func (l *Logger) Println(v ...interface{}) {
-	l.toOutput("", v...)
+	l.toOutput(nil, v...)
 }
 
 func (l *Logger) Printf(format string, v ...interface{}) {
-	l.toOutput(format, v...)
+	l.toOutput(&format, v...)
 }
 
 func (l *Logger) Panicln(v ...interface{}) {
-	l.toOutput("", v...)
+	l.toOutput(nil, v...)
 	panic(v)
 }
 
 func (l *Logger) Panicf(format string, v ...interface{}) {
-	l.toOutput(format, v...)
+	l.toOutput(&format, v...)
 	panic(v)
 }
 

@@ -18,7 +18,7 @@ func init() {
 		Path:    "/redirect",
 		Method:  http.MethodPost,
 		Handler: createRedirect,
-	})
+	}, false)
 }
 
 func createRedirect(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +36,10 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 	key, err := db.Postgres.GetKeyByRedirect(r.Context(), input.URL)
 	if err == nil && key != "" {
 		response := fmt.Sprintf("https://%s/%s", r.Host, key)
-		w.Write([]byte(response))
+		_, err := w.Write([]byte(response))
+		if err != nil {
+			utils.Error.Printf("Failed to write response: %v", err)
+		}
 		return
 	}
 
@@ -54,7 +57,10 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := fmt.Sprintf("https://%s/%s", r.Host, key)
-	w.Write([]byte(response))
+	_, err = w.Write([]byte(response))
+	if err != nil {
+		utils.Error.Printf("Failed to write response: %v", err)
+	}
 }
 
 func generateUniqueKey(ctx context.Context) (string, error) {

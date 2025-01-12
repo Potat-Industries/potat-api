@@ -47,8 +47,8 @@ func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
 	Info.Printf("Connected to RabbitMQ")
 
 	err = PublishToQueue(
-		context.Background(), 
-		"connected", 
+		context.Background(),
+		"connected",
 		5 * time.Second,
 	)
 	if err != nil {
@@ -149,7 +149,7 @@ func PublishToQueue(
 
 	ch, err := Conn.Channel()
 	if err != nil {
-		return err 
+		return err
 	}
 	defer ch.Close()
 
@@ -205,7 +205,6 @@ func handleMessage(message string) {
 	case "shutdown":
 		break; // Do nothing for now :)
 	case "ping":
-	  PublishToQueue(context.Background(), "pong", 5 * time.Second)
+	  _ = PublishToQueue(context.Background(), "pong", 5 * time.Second)
 	}
 }
-		
