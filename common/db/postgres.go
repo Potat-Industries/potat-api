@@ -140,16 +140,17 @@ func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User,
 func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*common.User, error) {
 	query := `
 		SELECT
-			users.user_id,
+			u.user_id,
 			username,
 			display,
 			first_seen,
 			level,
 			settings,
 			json_agg(uc) as connections
-		FROM users
-		JOIN user_connections uc ON users.user_id = uc.user_id
-		WHERE user_id = $1
+		FROM users u
+		JOIN user_connections uc ON u.user_id = uc.user_id
+		WHERE u.user_id = $1
+		GROUP BY u.user_id;
 	`
 
 	var user common.User
@@ -281,7 +282,11 @@ func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]commo
 	return &commands
 }
 
-func (db *DB) GetChannelByName(ctx context.Context, username string) (*common.Channel, error) {
+func (db *DB) GetChannelByID(
+	ctx context.Context,
+	channelID string,
+	platform common.Platforms,
+) (*common.Channel, error) {
 	query := `
 	  SELECT
 		  c.channel_id,
@@ -295,11 +300,102 @@ func (db *DB) GetChannelByName(ctx context.Context, username string) (*common.Ch
 			c.meta,
 			c.state
 		FROM channels c
-		WHERE username = $1;
+		WHERE channel_id = $1
+		AND platform = $2;
 	`
 
 	var channel common.Channel
-	err := db.Pool.QueryRow(ctx, query, username).Scan(
+	err := db.Pool.QueryRow(ctx, query, channelID, platform).Scan(
+		&channel.ChannelID,
+		&channel.Username,
+		&channel.JoinedAt,
+		&channel.AddedBy,
+		&channel.Platform,
+		&channel.Settings,
+		&channel.Editors,
+		&channel.Ambassadors,
+		&channel.Meta,
+		&channel.State,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+
+	var commands *[]common.ChannelCommand
+	go func() {
+		defer wg.Done()
+		cmds := db.GetChannelCommands(ctx, channel.ChannelID)
+		if cmds != nil {
+			commands = cmds
+		}
+	}()
+
+
+	var blocks []common.Block
+	go func() {
+		defer wg.Done()
+		bs := db.GetChannelBlocks(ctx, channel.ChannelID)
+		if bs != nil {
+			blocks = *bs
+		}
+	}()
+
+	wg.Wait()
+
+	if commands != nil {
+		channel.Commands = commands
+	} else {
+		channel.Commands = &[]common.ChannelCommand{}
+	}
+
+	if len(blocks) > 0 {
+		channel.Blocks = common.FilteredBlocks{
+			Users:    &[]common.Block{},
+			Commands: &[]common.Block{},
+		}
+
+		for _, block := range blocks {
+			if block.BlockType == common.UserBlock {
+				*channel.Blocks.Users = append(*channel.Blocks.Users, block)
+			} else if block.BlockType == common.CommandBlock {
+				*channel.Blocks.Commands = append(*channel.Blocks.Commands, block)
+			}
+		}
+	} else {
+		channel.Blocks = common.FilteredBlocks{}
+	}
+
+	return &channel, nil
+}
+
+func (db *DB) GetChannelByName(
+	ctx context.Context,
+	username string,
+	platform common.Platforms,
+) (*common.Channel, error) {
+	query := `
+	  SELECT
+		  c.channel_id,
+			c.username,
+			c.joined_at,
+			c.added_by,
+			c.platform,
+			c.settings,
+			c.editors,
+			c.ambassadors,
+			c.meta,
+			c.state
+		FROM channels c
+		WHERE username = $1
+		AND platform = $2;
+	`
+
+	var channel common.Channel
+	err := db.Pool.QueryRow(ctx, query, username, platform).Scan(
 		&channel.ChannelID,
 		&channel.Username,
 		&channel.JoinedAt,
