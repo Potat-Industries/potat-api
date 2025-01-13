@@ -31,6 +31,7 @@ type Config struct {
 type TwitchConfig struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+	OauthURI  	 string `json:"oauth_uri"`
 }
 
 type LoopsConfig struct {
