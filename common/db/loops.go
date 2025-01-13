@@ -73,8 +73,6 @@ func StartLoops(config common.Config) {
 
 	c.Start()
 
-	defer c.Stop()
-
 	go decrementDuels()
 	go deleteOldUploads()
 	go updateAggregateTable()
@@ -83,6 +81,7 @@ func StartLoops(config common.Config) {
 func decrementDuels() {
 	for {
 		time.Sleep(30 * time.Minute)
+		utils.Info.Println("Decrementing duels")
 
 		keys, err := Scan(context.Background(), "duelUse:*", 100, 0)
 		if err != nil {
@@ -119,6 +118,7 @@ func decrementDuels() {
 func deleteOldUploads() {
 	for {
 		time.Sleep(24 * time.Hour)
+		utils.Info.Println("Deleting old uploads")
 
 		query := `
 			DELETE FROM file_store
@@ -153,11 +153,12 @@ func updateAggregateTable() {
 			utils.Error.Println("Error updating aggregate table", err)
 		}
 
-		utils.Debug.Println("Updated aggregate table")
+		utils.Info.Println("Updated aggregate table")
 	}
 }
 
 func updateHourlyUsage() {
+	utils.Info.Println("Updating hourly usage")
 	query := `UPDATE gpt_usage SET hourly_usage = 0;`
 
 	_, err := Postgres.Pool.Exec(context.Background(), query)
@@ -165,10 +166,11 @@ func updateHourlyUsage() {
 		utils.Error.Println("Error updating hourly usage", err)
 	}
 
-	utils.Debug.Println("Updated hourly usage")
+	utils.Info.Println("Updated hourly usage")
 }
 
 func updateDailyUsage() {
+	utils.Info.Println("Updating daily usage")
 	query := `UPDATE gpt_usage SET daily_usage = 0`
 
 	_, err := Postgres.Pool.Exec(context.Background(), query)
@@ -176,10 +178,11 @@ func updateDailyUsage() {
 		utils.Error.Println("Error updating daily usage", err)
 	}
 
-	utils.Debug.Println("Updated daily usage")
+	utils.Info.Println("Updated daily usage")
 }
 
 func updateWeeklyUsage() {
+	utils.Info.Println("Updating weekly usage")
 	query := `UPDATE gpt_usage SET weekly_usage = 0`
 
 	_, err := Postgres.Pool.Exec(context.Background(), query)
@@ -187,10 +190,12 @@ func updateWeeklyUsage() {
 		utils.Error.Println("Error updating weekly usage", err)
 	}
 
-	utils.Debug.Println("Updated weekly usage")
+	utils.Info.Println("Updated weekly usage")
 }
 
 func updateColorView() {
+	utils.Info.Println("Updating color view")
+
 	query := `
 		INSERT INTO potatbotat.twitch_color_stats
 		SELECT
@@ -205,15 +210,15 @@ func updateColorView() {
 		GROUP BY color;
 	`
 
-	_, err := Postgres.Pool.Exec(context.Background(), query)
+	err := Clickhouse.Exec(context.Background(), query)
 	if err != nil {
-		utils.Error.Println("Error updating color view", err)
+		utils.Error.Println("Error updating color view ", err)
 	}
-
-	utils.Debug.Println("Updated colors view")
 }
 
 func updateBadgeView() {
+	utils.Info.Println("Updating badge view")
+
 	query := `
 		INSERT INTO potatbotat.twitch_badge_stats
 		SELECT
@@ -228,12 +233,10 @@ func updateBadgeView() {
 		GROUP BY badge;
 	`
 
-	_, err := Postgres.Pool.Exec(context.Background(), query)
+	err := Clickhouse.Exec(context.Background(), query)
 	if err != nil {
-		utils.Error.Println("Error updating badge view", err)
+		utils.Error.Println("Error updating badge view ", err)
 	}
-
-	utils.Debug.Println("Updated badges view")
 }
 
 func validateTokens() {
