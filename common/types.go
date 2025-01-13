@@ -252,3 +252,12 @@ type GenericResponse[T any] struct {
 	Data   *[]T   `json:"data"`
 	Errors *[]ErrorMessage `json:"errors,omitempty"`
 }
+
+type TwitchValidation struct {
+	ClientID   string   `json:"client_id"`
+	Login      string   `json:"login"`
+	Scopes     []string `json:"scopes"`
+	UserID     string   `json:"user_id"`
+	ExpiresIn  int      `json:"expires_in"`
+	StatusCode int      `json:"status_code"`
+}

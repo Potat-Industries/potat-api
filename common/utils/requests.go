@@ -1,12 +1,13 @@
 package utils
 
 import (
-	"fmt"
-	"time"
 	"bytes"
-	"strings"
-	"net/http"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"potat-api/common"
+	"strings"
+	"time"
 )
 
 type GqlQuery struct {
@@ -118,7 +119,10 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 	return users, nil
 }
 
-func ValidateHelixToken(token string) (bool, error) {
+func ValidateHelixToken(
+	token string,
+	returnAll bool,
+) (bool, *common.TwitchValidation, error) {
 	res, err := MakeRequest(
 		"GET",
 		"https://id.twitch.tv/oauth2/validate",
@@ -127,12 +131,22 @@ func ValidateHelixToken(token string) (bool, error) {
 	)
 
 	if err != nil {
-		return false, err
+		return false, &common.TwitchValidation{}, err
 	}
 
 	defer res.Body.Close()
 
-	return res.StatusCode != 401, nil
+	if !returnAll {
+		return res.StatusCode != 401, &common.TwitchValidation{}, nil
+	}
+
+	var validation common.TwitchValidation
+	err = json.NewDecoder(res.Body).Decode(&validation)
+	if err != nil {
+		return false, &common.TwitchValidation{}, err
+	}
+
+	return res.StatusCode != 401, &validation, nil
 }
 
 

@@ -71,13 +71,10 @@ func StartLoops(config common.Config) {
 		return
 	}
 
-
 	c.Start()
 
 	defer c.Stop()
 
-
-	// go backupClickhouse()
 	go decrementDuels()
 	go deleteOldUploads()
 	go updateAggregateTable()
@@ -240,6 +237,8 @@ func updateBadgeView() {
 }
 
 func validateTokens() {
+	utils.Info.Println("Validating Twitch tokens")
+
 	query := `
 		SELECT access_token, platform_id FROM connection_oauth WHERE platform = 'TWITCH';
 	`
@@ -269,7 +268,7 @@ func validateTokens() {
 			continue
 		}
 
-		valid, err := utils.ValidateHelixToken(con.AccessToken)
+		valid, _, err := utils.ValidateHelixToken(con.AccessToken, false)
 		if err != nil {
 			utils.Error.Println("Error validating token", err)
 			continue
@@ -287,7 +286,7 @@ func validateTokens() {
 				context.Background(),
 				deleteQuery,
 				con.PlatformID,
-				"TWITCH",
+				common.TWITCH,
 				con.AccessToken,
 			)
 			if err != nil {
@@ -295,10 +294,11 @@ func validateTokens() {
 			} else {
 				deleted++
 			}
+		} else {
+			validated++
 		}
 
 		time.Sleep(200 * time.Millisecond)
-		validated++
 	}
 
 	utils.Info.Printf(
