@@ -30,7 +30,7 @@ func main() {
 
 	initRedis(*config, ctx)
 
-	if config.API.Enabled {
+	if config.API.Enabled || config.Loops.Enabled {
 		initClickhouse(*config, ctx)
 	}
 
