@@ -50,9 +50,14 @@ func StartLoops(config common.Config) {
 		utils.Error.Println("Failed initializing cron updateWeeklyUsage", err)
 		return
 	}
-	_, err = c.AddFunc("0 * * * *", validateTokens)
+	_, err = c.AddFunc("@hourly", validateTokens)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron validateTokens", err)
+		return
+	}
+	_, err = c.AddFunc("0 */2 * * *", refreshAllHelixTokens)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron refreshAllHelixTokens", err)
 		return
 	}
 	_, err = c.AddFunc("*/5 * * * *", updateColorView)
@@ -239,8 +244,92 @@ func updateBadgeView() {
 	}
 }
 
+func upsertOAuthToken(
+	oauth *common.GenericOAUTHResponse,
+	con common.PlatformOauth,
+) error {
+	query := `
+		INSERT INTO connection_oauth (
+			platform_id,
+			access_token,
+			refresh_token,
+			scope,
+			expires_in,
+			added_at,
+			platform
+      )
+		VALUES
+			($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (platform_id, platform)
+		DO UPDATE SET
+			access_token = EXCLUDED.access_token,
+			refresh_token = EXCLUDED.refresh_token,
+			scope = EXCLUDED.scope,
+			expires_in = EXCLUDED.expires_in,
+			added_at = EXCLUDED.added_at;
+	`
+
+	_, err := Postgres.Pool.Exec(
+		context.Background(),
+		query,
+		con.PlatformID,
+		oauth.AccessToken,
+		oauth.RefreshToken,
+		oauth.Scope,
+		oauth.ExpiresIn,
+		time.Now(),
+		common.TWITCH,
+	)
+
+	return err
+}
+
+func deleteExpiredToken(con common.PlatformOauth) error {
+	deleteQuery := `
+		DELETE FROM connection_oauth
+		WHERE platform_id = $1
+		AND platform = $2
+		AND access_token = $3;
+	`
+
+	_, err := Postgres.Pool.Exec(
+		context.Background(),
+		deleteQuery,
+		con.PlatformID,
+		common.TWITCH,
+		con.AccessToken,
+	)
+
+	return err
+}
+
+func refreshOrDelete(con common.PlatformOauth) (bool, error){
+	var err error
+	if con.RefreshToken == "" {
+		utils.Error.Println("Missing refresh token for user_id, deleting", con.PlatformID)
+		err = deleteExpiredToken(con)
+		return false, err
+	}
+
+	refreshResult, err := utils.RefreshHelixToken(con.RefreshToken)
+	if err != nil || refreshResult == nil {
+		err = deleteExpiredToken(con)
+		return false, err
+	}
+
+	err = upsertOAuthToken(refreshResult, con)
+	if err != nil {
+		utils.Error.Println(
+			"Error updating token for user_id", con.PlatformID, ":", err,
+		)
+		return false, err
+	}
+
+	return true, nil
+}
+
 func validateTokens() {
-	utils.Info.Println("Validating Twitch tokens")
+	utils.Info.Println("Validating Twitch tokens ")
 
 	query := `
 		SELECT access_token, platform_id FROM connection_oauth WHERE platform = 'TWITCH';
@@ -248,55 +337,42 @@ func validateTokens() {
 
 	rows, err := Postgres.Pool.Query(context.Background(), query)
 	if err != nil {
-		utils.Error.Println("Error getting tokens", err)
+		utils.Error.Println("Error getting tokens ", err)
 		return
 	}
-
 	defer rows.Close()
 
-	var validated = 0
-	var deleted = 0
-
+	validated, deleted := 0, 0
 	for rows.Next() {
 		var con common.PlatformOauth
 
 		err := rows.Scan(&con.AccessToken, &con.PlatformID)
 		if err != nil {
-				utils.Error.Println("Error scanning token:", err)
+				utils.Error.Println("Error scanning token: ", err)
 				continue
-		}
-
-		if con.AccessToken == "" {
-			utils.Error.Println("Empty token for user_id", con.PlatformID)
-			continue
 		}
 
 		valid, _, err := utils.ValidateHelixToken(con.AccessToken, false)
 		if err != nil {
-			utils.Error.Println("Error validating token", err)
+			utils.Error.Println("Error validating token ", err)
 			continue
 		}
 
 		if !valid {
-			deleteQuery := `
-				DELETE FROM connection_oauth
-				WHERE platform_id = $1
-				AND platform = $2
-				AND access_token = $3;
-			`
-
-			_, err := Postgres.Pool.Exec(
-				context.Background(),
-				deleteQuery,
-				con.PlatformID,
-				common.TWITCH,
-				con.AccessToken,
-			)
+			ok, err := refreshOrDelete(con)
 			if err != nil {
-				utils.Error.Println("Error deleting token for user_id", con.PlatformID, ":", err)
+				utils.Error.Println("Error refreshing token ", err)
+				deleted++
+				continue
+			}
+
+			if ok {
+				validated++
 			} else {
 				deleted++
 			}
+
+			continue
 		} else {
 			validated++
 		}
@@ -308,6 +384,71 @@ func validateTokens() {
 		"Validated %d helix tokens, and deleted %d expired tokens",
 		validated,
 		deleted,
+	)
+}
+
+func refreshAllHelixTokens() {
+	utils.Info.Println("Refreshing all Twitch tokens")
+
+	query := `
+		SELECT
+	  	platform,
+			platform_id,
+			access_token,
+			refresh_token,
+			expires_in,
+			added_at,
+			scope
+		FROM connection_oauth
+		WHERE platform = 'TWITCH';
+	`
+
+	rows, err := Postgres.Pool.Query(context.Background(), query)
+	if err != nil {
+		utils.Error.Println("Error getting tokens ", err)
+		return
+	}
+	defer rows.Close()
+
+	refreshed, failed := 0, 0
+	for rows.Next() {
+		var con common.PlatformOauth
+
+		err := rows.Scan(
+			&con.Platform,
+			&con.PlatformID,
+			&con.AccessToken,
+			&con.RefreshToken,
+			&con.ExpiresIn,
+			&con.AddedAt,
+			&con.Scope,
+		)
+		if err != nil {
+			utils.Error.Println("Error scanning token: ", err)
+			continue
+		}
+
+		ok, err := refreshOrDelete(con)
+		if err != nil {
+			utils.Error.Println("Error refreshing token ", err)
+			failed++
+			continue
+		}
+
+		if ok {
+			refreshed++
+		} else {
+			failed++
+		}
+
+		time.Sleep(200 * time.Millisecond)
+		continue
+	}
+
+	utils.Info.Printf(
+		"Refreshed %d helix tokens, %d failed and were expunged",
+		refreshed,
+		failed,
 	)
 }
 

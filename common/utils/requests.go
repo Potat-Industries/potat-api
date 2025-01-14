@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"potat-api/common"
 	"strings"
 	"time"
@@ -123,6 +124,10 @@ func ValidateHelixToken(
 	token string,
 	returnAll bool,
 ) (bool, *common.TwitchValidation, error) {
+	if token == "" {
+		return false, &common.TwitchValidation{}, fmt.Errorf("empty token")
+	}
+
 	res, err := MakeRequest(
 		"GET",
 		"https://id.twitch.tv/oauth2/validate",
@@ -149,5 +154,40 @@ func ValidateHelixToken(
 	return res.StatusCode != 401, &validation, nil
 }
 
+func RefreshHelixToken(token string) (*common.GenericOAUTHResponse, error) {
+	if token == "" {
+		return nil, fmt.Errorf("empty token provided bro")
+	}
 
+	params := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {token},
+		"client_id":     {config.Twitch.ClientID},
+		"client_secret": {config.Twitch.ClientSecret},
+	}.Encode()
 
+	res, err := MakeRequest(
+		"POST",
+		"https://id.twitch.tv/oauth2/token",
+		map[string]string{"Content-Type": "application/x-www-form-urlencoded"},
+		bytes.NewBuffer([]byte(params)),
+	)
+
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to refresh token")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	var response common.GenericOAUTHResponse
+	err = json.NewDecoder(res.Body).Decode(&response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}

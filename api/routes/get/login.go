@@ -17,14 +17,6 @@ import (
 	"potat-api/common/utils"
 )
 
-type GenericOAUTHResponse struct {
-	AccessToken  string 	`json:"access_token"`
-	RefreshToken string 	`json:"refresh_token"`
-	Scope        []string `json:"scope"`
-	ExpiresIn    int    	`json:"expires_in"`
-	TokenType    string 	`json:"token_type"`
-}
-
 const (
 	twitchOauthURI = "https://id.twitch.tv/oauth2/authorize"
 	twitchOauthToken = "https://id.twitch.tv/oauth2/token"
@@ -81,8 +73,8 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 			"response_type": {"code"},
 			"scope":         {scopes},
 			"state":         {setReplyDeny()},
-		}
-		uri := fmt.Sprintf("%s?%s", twitchOauthURI, params.Encode())
+		}.Encode()
+		uri := fmt.Sprintf("%s?%s", twitchOauthURI, params)
 		http.Redirect(w, r, uri, http.StatusFound)
 		return
 	}
@@ -111,7 +103,7 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tokenResp.Body.Close()
 
-	var tokenData GenericOAUTHResponse
+	var tokenData common.GenericOAUTHResponse
 	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenData); err != nil {
 		http.Error(w, "Failed to parse token response", http.StatusInternalServerError)
 		return
