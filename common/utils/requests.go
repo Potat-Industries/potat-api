@@ -159,6 +159,10 @@ func RefreshHelixToken(token string) (*common.GenericOAUTHResponse, error) {
 		return nil, fmt.Errorf("empty token provided bro")
 	}
 
+	if config.Twitch.ClientID == "" || config.Twitch.ClientSecret == "" {
+		Debug.Fatalln("Twitch client ID or secret not set")
+	}
+
 	params := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {token},
