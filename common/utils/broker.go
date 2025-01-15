@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"potat-api/common"
+	"strings"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -11,6 +12,7 @@ import (
 
 var (
 	Conn *amqp.Connection
+	proxySocketFn func(string) error
 )
 
 func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
@@ -70,11 +72,43 @@ func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
 	return cleanup, nil
 }
 
+func SetProxySocketFn(fn func(string) error) {
+	proxySocketFn = fn
+}
+
 func Stop() {
 	if Conn != nil {
 		_ = Conn.Close()
 		Warn.Printf("RabbitMQ connection closed")
 	}
+}
+
+func declare(queue string, channel *amqp.Channel) (amqp.Queue, error) {
+	return channel.QueueDeclare(
+		queue,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+}
+
+func consume(
+	ctx context.Context,
+	queue amqp.Queue,
+	channel *amqp.Channel,
+) (<-chan amqp.Delivery, error) {
+	return channel.ConsumeWithContext(
+		ctx,
+		queue.Name,
+		"",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
 }
 
 func consumeFromQueue(
@@ -90,14 +124,12 @@ func consumeFromQueue(
 		return err
 	}
 
-	queue, err := ch.QueueDeclare(
-		"potat-api",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
+	queue, err := declare("potat-api", ch)
+	if err != nil {
+		return err
+	}
+
+	proxyQueue, err := declare("proxy-socket", ch)
 	if err != nil {
 		return err
 	}
@@ -113,25 +145,34 @@ func consumeFromQueue(
 		return err
 	}
 
-	msgs, err := ch.ConsumeWithContext(
-		ctx,
-		queue.Name,
-		"",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
+	msgs, err := consume(ctx, queue, ch)
+	if err != nil {
+		return err
+	}
+
+	proxyMsgs, err := consume(ctx, proxyQueue, ch)
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		for d := range msgs {
-			Debug.Printf("[x] Received %s", d.Body)
-			handleMessage(string(d.Body))
-		}
+    for {
+			select {
+			case msg := <-msgs:
+				if msg.Body != nil {
+					msg.Ack(true)
+					handleMessage(string(msg.Body))
+				}
+			case msg := <-proxyMsgs:
+				if msg.Body != nil && proxySocketFn != nil {
+					msg.Ack(true)
+					err := proxySocketFn(string(msg.Body))
+					if err != nil {
+						Warn.Printf("Failed to send message to socket: %v", err)
+					}
+				}
+			}
+    }
 	}()
 
 	return nil
@@ -201,10 +242,28 @@ func PublishToQueue(
 }
 
 func handleMessage(message string) {
-	switch message {
-	case "shutdown":
-		break; // Do nothing for now :)
+	if message == "" {
+		return
+	}
+	parts := strings.Split(message, ":")
+
+	var topic string
+	if len(parts) >= 1 {
+		topic = parts[0]
+		message = strings.Join(parts[1:], ":")
+	} else {
+		topic = message
+	}
+
+	Debug.Printf("[x] Received %s", message)
+
+	switch topic {
 	case "ping":
-	  _ = PublishToQueue(context.Background(), "pong", 5 * time.Second)
+	  err := PublishToQueue(context.Background(), "pong", 5 * time.Second)
+	  if err != nil {
+			Warn.Printf("Failed to send pong: %v", err)
+		}
+	default:
+		Debug.Printf("[x] Unrecognized topic: %s", topic)
 	}
 }

@@ -18,6 +18,7 @@ type Config struct {
 	Postgres   SQLConfig      `json:"postgres"`
 	Clickhouse SQLConfig      `json:"clickhouse"`
 	API        APIConfig      `json:"api"`
+	Socket 	 	 APIConfig      `json:"socket"`
 	Redirects  APIConfig      `json:"redirects"`
 	Uploader   APIConfig      `json:"uploader"`
 	Prometheus APIConfig      `json:"prometheus"`

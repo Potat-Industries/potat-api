@@ -1,15 +1,16 @@
 package main
 
 import (
-	"os"
-	"time"
-	"errors"
-	"syscall"
 	"context"
+	"errors"
+	"os"
 	"os/signal"
+	"syscall"
+	"time"
 
 	"potat-api/api"
 	"potat-api/haste"
+	"potat-api/socket"
 	"potat-api/common"
 	"potat-api/uploader"
 	"potat-api/redirects"
@@ -53,6 +54,13 @@ func main() {
 		syscall.SIGINT,
 	)
 
+	socketChan := make(chan error)
+	if config.Socket.Enabled {
+		go func() {
+			socketChan <- socket.StartServing(*config)
+		}()
+	}
+
 	hastebinChan := make(chan error)
 	if config.Haste.Enabled {
 		go func() {
@@ -90,13 +98,17 @@ func main() {
 
 	select {
 	case err := <-hastebinChan:
-		utils.Error.Panicln("Hastebin server error!", err)
+		utils.Error.Panicln("Hastebin server error! ", err)
 	case err := <-redirectsChan:
-		utils.Error.Panicln("Redirects server error!", err)
+		utils.Error.Panicln("Redirects server error! ", err)
 	case err := <-apiChan:
-		utils.Error.Panicln("API server error!", err)
+		utils.Error.Panicln("API server error! ", err)
 	case err := <-metricsChan:
-		utils.Error.Panicln("Metrics server error!", err)
+		utils.Error.Panicln("Metrics server error! ", err)
+	case err := <-uploaderChan:
+		utils.Error.Panicln("Uploader server error! ", err)
+	case err := <-socketChan:
+		utils.Error.Panicln("Socket server error! ", err)
 	case <-shutdownChan:
 		utils.Warn.Println("Shutdown requested...")
 	}

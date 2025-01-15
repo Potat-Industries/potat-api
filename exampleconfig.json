@@ -12,6 +12,11 @@
     "host": "localhost",
     "port": ""
   },
+  "socket": {
+    "enabled": false,
+    "host": "localhost",
+    "port": ""
+  },
   "redirects": {
     "enabled": false,
     "host": "localhost",

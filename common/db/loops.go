@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -284,36 +285,14 @@ func upsertOAuthToken(
 	return err
 }
 
-func deleteExpiredToken(con common.PlatformOauth) error {
-	deleteQuery := `
-		DELETE FROM connection_oauth
-		WHERE platform_id = $1
-		AND platform = $2
-		AND access_token = $3;
-	`
-
-	_, err := Postgres.Pool.Exec(
-		context.Background(),
-		deleteQuery,
-		con.PlatformID,
-		common.TWITCH,
-		con.AccessToken,
-	)
-
-	return err
-}
-
 func refreshOrDelete(con common.PlatformOauth) (bool, error) {
 	var err error
 	if con.RefreshToken == "" {
-		utils.Error.Println("Missing refresh token for user_id, deleting", con.PlatformID)
-		err = deleteExpiredToken(con)
-		return false, err
+		return false, errors.New("missing refresh token")
 	}
 
 	refreshResult, err := utils.RefreshHelixToken(con.RefreshToken)
 	if err != nil || refreshResult == nil {
-		err = deleteExpiredToken(con)
 		return false, err
 	}
 
