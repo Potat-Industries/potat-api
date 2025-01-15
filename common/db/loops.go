@@ -303,7 +303,7 @@ func deleteExpiredToken(con common.PlatformOauth) error {
 	return err
 }
 
-func refreshOrDelete(con common.PlatformOauth) (bool, error){
+func refreshOrDelete(con common.PlatformOauth) (bool, error) {
 	var err error
 	if con.RefreshToken == "" {
 		utils.Error.Println("Missing refresh token for user_id, deleting", con.PlatformID)
@@ -332,7 +332,12 @@ func validateTokens() {
 	utils.Info.Println("Validating Twitch tokens ")
 
 	query := `
-		SELECT access_token, platform_id FROM connection_oauth WHERE platform = 'TWITCH';
+		SELECT
+			access_token,
+			platform_id,
+			refresh_token
+		FROM connection_oauth
+		WHERE platform = 'TWITCH';
 	`
 
 	rows, err := Postgres.Pool.Query(context.Background(), query)
@@ -346,7 +351,7 @@ func validateTokens() {
 	for rows.Next() {
 		var con common.PlatformOauth
 
-		err := rows.Scan(&con.AccessToken, &con.PlatformID)
+		err := rows.Scan(&con.AccessToken, &con.PlatformID, &con.RefreshToken)
 		if err != nil {
 				utils.Error.Println("Error scanning token: ", err)
 				continue
