@@ -35,6 +35,8 @@ func StartLoops(config common.Config) {
 
 	c := cron.New()
 
+	go backupPostgres()
+
 	var err error
 	_, err = c.AddFunc("@hourly", updateHourlyUsage)
 	if err != nil {
@@ -479,7 +481,7 @@ func backupPostgres() {
 		return
 	}
 
-	files, err := filepath.Glob(filepath.Join(dumpPath, "*.sql.gz"))
+	files, err := filepath.Glob(filepath.Join(dumpPath, "*.sql.zst"))
 	if err != nil {
 		utils.Error.Println("Failed to list dump files:", err)
 		return
@@ -487,9 +489,9 @@ func backupPostgres() {
 
 	deleteOldDumps(files, maxFiles)
 
-	filePath := filepath.Join(dumpPath, fmt.Sprintf("data_%d.sql.gz", time.Now().Unix()))
+	filePath := filepath.Join(dumpPath, fmt.Sprintf("data_%d.sql.zst", time.Now().Unix()))
 	cmd := exec.Command("sh", "-c", fmt.Sprintf(
-		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | gzip > %s",
+		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | zstd > %s",
 		pgPassword, dbName, dbUser, dbHost, filePath,
 	))
 
