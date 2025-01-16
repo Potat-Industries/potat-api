@@ -337,12 +337,12 @@ const (
 type Flags map[string]interface{}
 
 type CommandConditions struct {
-	Ryan       *bool `json:"ryan,omitempty"`
-	OfflineOnly *bool `json:"offline_only,omitempty"`
-	Whisperable *bool `json:"whisperable,omitempty"`
-	IgnoreBots *bool `json:"ignore_bots,omitempty"`
-	IsBlockable *bool `json:"is_blockable,omitempty"`
-	IsNotPipable *bool `json:"is_not_pipable,omitempty"`
+	Ryan       		*bool `json:"ryan,omitempty"`
+	OfflineOnly		*bool `json:"offlineOnly,omitempty"`
+	Whisperable		*bool `json:"whisperable,omitempty"`
+	IgnoreBots		*bool `json:"ignoreBots,omitempty"`
+	IsBlockable		*bool `json:"isBlockable,omitempty"`
+	IsNotPipable	*bool `json:"isNotPipable,omitempty"`
 }
 
 type BotCommandRequirements string
