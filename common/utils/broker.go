@@ -2,17 +2,20 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"potat-api/common"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var (
 	Conn *amqp.Connection
 	proxySocketFn func(string) error
+	connString string
 )
 
 func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
@@ -36,16 +39,15 @@ func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
 		port = "5672"
 	}
 
-	connString := fmt.Sprintf(
+	connString = fmt.Sprintf(
 		"amqp://%s:%s@%s:%s/", user, password, host, port,
 	)
 
 	var err error
-	Conn, err = amqp.Dial(connString)
+	Conn, err = getConnection()
 	if err != nil {
 		return nil, err
 	}
-
 	Info.Printf("Connected to RabbitMQ")
 
 	err = PublishToQueue(
@@ -70,6 +72,15 @@ func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
 	}
 
 	return cleanup, nil
+}
+
+func getConnection() (*amqp.Connection, error) {
+	conn, err := amqp.Dial(connString)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 func SetProxySocketFn(fn func(string) error) {
@@ -234,9 +245,10 @@ func PublishToQueue(
 		false,
 		false,
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(message),
-			Expiration:  fmt.Sprintf("%d", ttl.Milliseconds()),
+			ContentType: 	 	"text/plain",
+			Body:        	 	[]byte(message),
+			CorrelationId: 	"potat-api",
+			Expiration:  	 	fmt.Sprintf("%d", ttl.Milliseconds()),
 		},
 	)
 	if err != nil {
@@ -276,5 +288,74 @@ func handleMessage(message string) {
 		}
 	default:
 		Debug.Printf("[x] Unrecognized topic: %s", topic)
+	}
+}
+
+func RequestManager(
+	ctx context.Context,
+	ttl time.Duration,
+	request string,
+	callback func([]byte),
+) error {
+	if request == "" {
+		return errors.New("empty request")
+	}
+
+	conn, err := getConnection()
+	if err != nil {
+		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		return fmt.Errorf("failed to open RabbitMQ channel: %w", err)
+	}
+	defer ch.Close()
+
+	queue, err := declare("job-requests", ch)
+	if err != nil {
+		return fmt.Errorf("failed to declare reply queue: %w", err)
+	}
+
+	msgs, err := consume(ctx, queue, ch)
+	if err != nil {
+		return fmt.Errorf("failed to consume from reply queue: %w", err)
+	}
+
+	correlationID := uuid.New().String()
+
+	err = ch.PublishWithContext(
+		ctx,
+		"job-requests",
+		"job-requests",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:   "text/plain",
+			CorrelationId: correlationID,
+			ReplyTo:       "job-requests",
+			Body:          []byte(request),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to publish request: %w", err)
+	}
+
+	timeout := time.NewTimer(ttl)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timeout.C:
+			return fmt.Errorf("request timed out after %s", ttl)
+		case msg := <-msgs:
+			if msg.CorrelationId == correlationID {
+				callback(msg.Body)
+				timeout.Stop()
+				return nil
+			}
+		}
 	}
 }

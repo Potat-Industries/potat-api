@@ -30,7 +30,7 @@ var (
 
 func init() {
 	api.SetRoute(api.Route{
-		Path:    "/twitch/me",
+		Path:    "/login",
 		Method:  http.MethodGet,
 		Handler: twitchLoginHandler,
 	}, false)

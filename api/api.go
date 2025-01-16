@@ -23,6 +23,8 @@ var router *mux.Router
 var authedRouter *mux.Router
 
 func init() {
+	middleware.SetUnauthorizedFunc(GenericResponse)
+
 	router = mux.NewRouter()
 
 	limiter := middleware.NewRateLimiter(100, 1 * time.Minute)
@@ -66,16 +68,16 @@ func SetRoute(route Route, auth bool) {
 }
 
 func GenericResponse(
-	r http.ResponseWriter,
+	w http.ResponseWriter,
 	code int,
 	response interface{},
 	start time.Time,
 ) {
-	r.WriteHeader(code)
-	r.Header().Set("Content-Type", "application/json")
-	r.Header().Set("X-Potat-Request-Duration", time.Since(start).String())
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-Duration", time.Since(start).String())
+	w.WriteHeader(code)
 
-	err := json.NewEncoder(r).Encode(response)
+	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
 		utils.Error.Printf("Error encoding response: %v", err)
 	}

@@ -269,3 +269,86 @@ type GenericOAUTHResponse struct {
 	ExpiresIn    int    	`json:"expires_in"`
 	TokenType    string 	`json:"token_type"`
 }
+
+type Command struct {
+	Name              	string             			`json:"name"`
+	Description       	string             			`json:"description"`
+	DetailedDescription string           				`json:"detailedDescription,omitempty"`
+	Title             	string             			`json:"title"`
+	Usage             	string             			`json:"usage"`
+	Category          	CommandCategories       `json:"category"`
+	Aliases           	[]string           			`json:"aliases"`
+	Flags             	[]FlagDetails      			`json:"flags"`
+	Cooldown          	int                			`json:"cooldown"`
+	Level             	PermissionLevel    			`json:"level"`
+	BotRequires       	BotCommandRequirements	`json:"botRequires"`
+	UserRequires      	UserRequires       			`json:"userRequires"`
+	Conditions        	CommandConditions  			`json:"conditions"`
+}
+
+type CommandCategories string
+
+const (
+	Development CommandCategories = "development"
+	Deprecated  CommandCategories = "deprecated"
+	Moderation  CommandCategories = "moderation"
+	Utilities   CommandCategories = "utilities"
+	Unlisted    CommandCategories = "unlisted"
+	Settings    CommandCategories = "settings"
+	Stream      CommandCategories = "stream"
+	Potato      CommandCategories = "potato"
+	Emotes      CommandCategories = "emotes"
+	Anime       CommandCategories = "anime"
+	Spam        CommandCategories = "spam"
+	Misc        CommandCategories = "misc"
+	Fun         CommandCategories = "fun"
+)
+
+type FlagDetails struct {
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Level       PermissionLevel   `json:"level"`
+	UserRequires *UserRequires    `json:"user_requires,omitempty"`
+	Required    bool              `json:"required"`
+	Description string            `json:"description"`
+	Usage       *string           `json:"usage,omitempty"`
+	Aliases     []string          `json:"aliases,omitempty"`
+	Multi       *bool             `json:"multi,omitempty"`
+	Check       func(params Flags, flag FlagDetails) (FlagCheckResult, error) `json:"-"`
+}
+
+type FlagCheckResult struct {
+	MustBe *string `json:"must_be,omitempty"`
+	Valid  bool    `json:"valid"`
+	Error  *string `json:"error,omitempty"`
+}
+
+type UserRequires string
+
+const (
+	None        UserRequires = "NONE"
+	Subscriber  UserRequires = "SUBSCRIBER"
+	VIP         UserRequires = "VIP"
+	Mod         UserRequires = "MOD"
+	Ambassador  UserRequires = "AMBASSADOR"
+	Broadcaster UserRequires = "BROADCASTER"
+)
+
+type Flags map[string]interface{}
+
+type CommandConditions struct {
+	Ryan       *bool `json:"ryan,omitempty"`
+	OfflineOnly *bool `json:"offline_only,omitempty"`
+	Whisperable *bool `json:"whisperable,omitempty"`
+	IgnoreBots *bool `json:"ignore_bots,omitempty"`
+	IsBlockable *bool `json:"is_blockable,omitempty"`
+	IsNotPipable *bool `json:"is_not_pipable,omitempty"`
+}
+
+type BotCommandRequirements string
+
+const (
+	BotNone BotCommandRequirements = "NONE"
+	BotVIP  BotCommandRequirements = "VIP"
+	BotMod  BotCommandRequirements = "MOD"
+)

@@ -88,6 +88,8 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Cache-Hit", "HIT")
 		http.Redirect(w, r, cache, http.StatusSeeOther)
 		return
+	} else {
+		w.Header().Set("X-Cache-Hit", "MISS")
 	}
 
 	redirect, err := db.Postgres.GetRedirectByKey(r.Context(), key)

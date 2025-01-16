@@ -14,6 +14,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type UnauthorizedResponse = common.GenericResponse[string]
+
 type AuthenticatedUser string
 
 type PotatClaims struct {
@@ -21,7 +23,15 @@ type PotatClaims struct {
 	jwt.RegisteredClaims
 }
 
-var JWTSecret []byte
+var (
+	JWTSecret []byte
+	unauthorizedFunc func (
+		w http.ResponseWriter,
+		status int,
+		response interface{},
+		start time.Time,
+	)
+)
 
 const AuthedUser = AuthenticatedUser("authenticated-user")
 
@@ -29,12 +39,29 @@ func SetJWTSecret(s string) {
 	JWTSecret = []byte(s)
 }
 
+func SetUnauthorizedFunc(f func (
+	w http.ResponseWriter,
+	status int,
+	response interface{},
+	start time.Time,
+)) {
+	unauthorizedFunc = f
+}
+
+func sendUnauthorized(w http.ResponseWriter) {
+	utils.Warn.Println("Unauthorized request")
+	unauthorizedFunc(w, http.StatusTeapot, UnauthorizedResponse{
+		Data:   &[]string{},
+		Errors: &[]common.ErrorMessage{{Message: "Unauthorized"}},
+	}, time.Now())
+}
+
 func SetStaticAuthMiddleware(secret string) func(http.Handler) http.Handler {
 	return func (next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := strings.Replace(r.Header.Get("Authorization"), "Bearer ", "", 1)
 			if !verifySimpleAuthKey(auth, secret) {
-				http.Error(w, http.StatusText(http.StatusTeapot), http.StatusTeapot)
+				sendUnauthorized(w)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -51,13 +78,13 @@ func SetDynamicAuthMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := r.Header.Get("Authorization")
 			if token == "" {
-				http.Error(w, http.StatusText(http.StatusTeapot), http.StatusTeapot)
+				sendUnauthorized(w)
 				return
 			}
 
 			ok, user := verifyDynamicAuth(token, r.Context())
 			if !ok {
-				http.Error(w, http.StatusText(http.StatusTeapot), http.StatusUnauthorized)
+				sendUnauthorized(w)
 				return
 			}
 
