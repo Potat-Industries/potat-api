@@ -159,6 +159,10 @@ func consumeFromQueue(
     for {
 			select {
 			case msg := <-msgs:
+				// TODO: smarter way to ignore self messages uuh
+				if strings.HasPrefix(string(msg.Body), "postgres") {
+					msg.Reject(true)
+				}
 				if msg.Body != nil {
 					msg.Ack(true)
 					handleMessage(string(msg.Body))
@@ -262,6 +266,11 @@ func handleMessage(message string) {
 	  err := PublishToQueue(context.Background(), "pong", 5 * time.Second)
 	  if err != nil {
 			Warn.Printf("Failed to send pong: %v", err)
+		}
+	case "postgres-backup":
+		err := PublishToQueue(context.Background(), "backup", 5 * time.Second)
+		if err != nil {
+			Warn.Printf("Failed to send backup message: %v", err)
 		}
 	default:
 		Debug.Printf("[x] Unrecognized topic: %s", topic)

@@ -35,8 +35,6 @@ func StartLoops(config common.Config) {
 
 	c := cron.New()
 
-	go backupPostgres()
-
 	var err error
 	_, err = c.AddFunc("@hourly", updateHourlyUsage)
 	if err != nil {
