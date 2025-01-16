@@ -167,6 +167,7 @@ func consumeFromQueue(
 					msg.Ack(true)
 					handleMessage(string(msg.Body))
 				}
+				msg.Nack(false, false)
 			case msg := <-proxyMsgs:
 				if msg.Body != nil && proxySocketFn != nil {
 					msg.Ack(true)
@@ -175,6 +176,7 @@ func consumeFromQueue(
 						Warn.Printf("Failed to send message to socket: %v", err)
 					}
 				}
+				msg.Nack(false, false)
 			}
     }
 	}()
