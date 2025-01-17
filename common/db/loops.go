@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"time"
 
@@ -82,6 +83,12 @@ func StartLoops(config common.Config) {
 	go decrementDuels()
 	go deleteOldUploads()
 	go updateAggregateTable()
+
+	backupPostgres()
+
+	time.Sleep(5 * time.Second)
+
+	backupPostgres()
 }
 
 func decrementDuels() {
@@ -487,11 +494,27 @@ func backupPostgres() {
 
 	deleteOldDumps(files, maxFiles)
 
-	filePath := filepath.Join(dumpPath, fmt.Sprintf("data_%d.sql.zst", time.Now().Unix()))
+	numThreads := runtime.NumCPU()
+
+	filePath := filepath.Join(
+		dumpPath,
+		fmt.Sprintf("data_%d.sql.zst",time.Now().Unix()),
+	)
+
 	cmd := exec.Command("sh", "-c", fmt.Sprintf(
-		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | zstd > %s",
-		pgPassword, dbName, dbUser, dbHost, filePath,
+		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | zstd -3 --threads=%d > %s",
+		pgPassword, dbName, dbUser, dbHost, numThreads, filePath,
 	))
+
+	defer func() {
+		if err := cmd.Process.Release(); err != nil {
+			utils.Error.Println("Failed to release pg_dump process:", err)
+
+			if err := cmd.Process.Kill(); err != nil {
+				utils.Error.Fatalln("Failed to kill pg_dump process:", err)
+			}
+		}
+	}()
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
