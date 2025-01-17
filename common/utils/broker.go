@@ -116,7 +116,7 @@ func consume(
 		"",
 		false,
 		false,
-		false,
+		true,
 		false,
 		nil,
 	)
@@ -169,93 +169,53 @@ func consumeFromQueue(
 	go func() {
     for {
 			select {
+			case <-ctx.Done():
+				return;
 			case msg := <-msgs:
-				// TODO: smarter way to ignore self messages uuh
-				if strings.HasPrefix(string(msg.Body), "postgres") {
-					msg.Reject(true)
+				if msg.Body == nil {
+					_ = msg.Reject(false)
+					continue
 				}
-				if msg.Body != nil {
-					msg.Ack(true)
-					handleMessage(string(msg.Body))
+
+				if msg.CorrelationId == "potatbotat" {
+					err := msg.Ack(false)
+					if err != nil {
+						Warn.Printf("Failed to acknowledge message: %v", err)
+					} else {
+						handleMessage(string(msg.Body))
+					}
+				} else {
+					err := msg.Reject(true)
+					if err != nil {
+						Warn.Printf("Failed to reject and requeue message: %v", err)
+					}
 				}
-				msg.Nack(false, false)
 			case msg := <-proxyMsgs:
-				if msg.Body != nil && proxySocketFn != nil {
-					msg.Ack(true)
-					err := proxySocketFn(string(msg.Body))
+				if msg.Body == nil {
+					_ = msg.Reject(false)
+					continue
+				}
+
+				if proxySocketFn != nil {
+					err := msg.Ack(false)
+					if err != nil {
+						Warn.Printf("Failed to acknowledge message: %v", err)
+					}
+					err = proxySocketFn(string(msg.Body))
 					if err != nil {
 						Warn.Printf("Failed to send message to socket: %v", err)
 					}
+				} else {
+					Warn.Println("Proxy socket function not set")
+					err := msg.Reject(true)
+					if err != nil {
+						Warn.Printf("Failed to acknowledge message: %v", err)
+					}
 				}
-				msg.Nack(false, false)
 			}
     }
 	}()
 
-	return nil
-}
-
-func PublishToQueue(
-	ctx context.Context,
-	message string,
-	ttl time.Duration,
-) error {
-	if Conn == nil {
-		Warn.Println("RabbitMQ connection not established")
-		return nil
-	}
-
-	ch, err := Conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	queue, err := ch.QueueDeclare(
-		"potat-api",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 5 * time.Second)
-	defer cancel()
-
-	err = ch.ExchangeDeclare(
-		"potat-api",
-		"direct",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-
-	err = ch.PublishWithContext(ctx,
-		"potat-api",
-		queue.Name,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: 	 	"text/plain",
-			Body:        	 	[]byte(message),
-			CorrelationId: 	"potat-api",
-			Expiration:  	 	fmt.Sprintf("%d", ttl.Milliseconds()),
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	Debug.Printf("[x] Sent %s", message)
 	return nil
 }
 
@@ -281,14 +241,54 @@ func handleMessage(message string) {
 	  if err != nil {
 			Warn.Printf("Failed to send pong: %v", err)
 		}
-	case "postgres-backup":
-		err := PublishToQueue(context.Background(), "backup", 5 * time.Second)
+	case "pong":
+		Debug.Println("PotatBotat Reconnected to API")
+		err := PublishToQueue(context.Background(), "ping", 5 * time.Second)
 		if err != nil {
-			Warn.Printf("Failed to send backup message: %v", err)
+			Warn.Printf("Failed to send ping: %v", err)
 		}
 	default:
 		Debug.Printf("[x] Unrecognized topic: %s", topic)
 	}
+}
+
+func PublishToQueue(
+	ctx context.Context,
+	message string,
+	ttl time.Duration,
+) error {
+	if Conn == nil {
+		Warn.Println("RabbitMQ connection not established")
+		return nil
+	}
+
+	ch, err := Conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+
+	ctx, cancel := context.WithTimeout(ctx, ttl + time.Second)
+	defer cancel()
+
+	err = ch.PublishWithContext(ctx,
+		"potat-api",
+		"potat-api",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: 	 	"text/plain",
+			Body:        	 	[]byte(message),
+			CorrelationId: 	"potat-api",
+			Expiration:  	 	fmt.Sprintf("%d", ttl.Milliseconds()),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	Debug.Printf("[x] Sent %s", message)
+	return nil
 }
 
 func RequestManager(
@@ -301,16 +301,17 @@ func RequestManager(
 		return errors.New("empty request")
 	}
 
-	conn, err := getConnection()
-	if err != nil {
-		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
-	}
-
-	ch, err := conn.Channel()
+	ch, err := Conn.Channel()
 	if err != nil {
 		return fmt.Errorf("failed to open RabbitMQ channel: %w", err)
 	}
-	defer ch.Close()
+
+	defer func() {
+		err := ch.Close()
+		if err != nil {
+			Warn.Printf("Failed to close channel: %v", err)
+		}
+	}()
 
 	queue, err := declare("job-requests", ch)
 	if err != nil {
@@ -335,6 +336,7 @@ func RequestManager(
 			CorrelationId: correlationID,
 			ReplyTo:       "job-requests",
 			Body:          []byte(request),
+			Expiration:    fmt.Sprintf("%d", ttl.Milliseconds()),
 		},
 	)
 	if err != nil {
