@@ -1,11 +1,11 @@
 package utils
 
 import (
+	"fmt"
+	"time"
+	"strings"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
-	"strings"
-	"time"
 )
 
 func RandomString(length int) (string, error) {
