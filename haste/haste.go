@@ -193,6 +193,10 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.Contains(key, ".") {
+		key = strings.Split(key, ".")[0]
+	}
+
 	cache, err := getRedis(r.Context(), key)
 	if cache != "" && err == nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
