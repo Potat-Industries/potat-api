@@ -83,12 +83,6 @@ func StartLoops(config common.Config) {
 	go decrementDuels()
 	go deleteOldUploads()
 	go updateAggregateTable()
-
-	backupPostgres()
-
-	time.Sleep(5 * time.Second)
-
-	backupPostgres()
 }
 
 func decrementDuels() {
