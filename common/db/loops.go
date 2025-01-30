@@ -1,17 +1,17 @@
 package db
 
 import (
+	"os"
+	"fmt"
+	"time"
+	"sort"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
-	"sort"
-	"time"
+	"encoding/json"
+	"path/filepath"
 
 	"potat-api/common"
 	"potat-api/common/utils"
@@ -77,9 +77,15 @@ func StartLoops(config common.Config) {
 		utils.Error.Println("Failed initializing cron backupPostgres", err)
 		return
 	}
+	_, err = c.AddFunc("0 */12 * * *", optimizeClickhouse)
+	if err != nil {
+		utils.Error.Println("Failed initializing cron optimizeClickhouse", err)
+		return
+	}
 
 	c.Start()
 
+	go optimizeClickhouse()
 	go decrementDuels()
 	go deleteOldUploads()
 	go updateAggregateTable()
@@ -576,4 +582,46 @@ func getDatabaseSize(dbName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no rows returned for database size query")
+}
+
+func optimizeClickhouse() {
+	// offset any concurrent crons
+	time.Sleep(5 * time.Minute)
+
+	utils.Info.Println("Optimizing Clickhouse tables")
+
+	config := utils.LoadConfig()
+	if config.Clickhouse.Database == "" {
+		utils.Error.Println("Clickhouse database is not configured")
+		return
+	}
+
+	query := `SELECT table FROM system.tables WHERE database = ?`
+
+	rows, err := Clickhouse.Query(context.Background(), query, config.Clickhouse.Database)
+	if err != nil {
+		utils.Error.Println("Failed to query Clickhouse tables:", err)
+		return
+	}
+
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			utils.Error.Println("Failed to scan Clickhouse table:", err)
+			continue
+		}
+
+		query := fmt.Sprintf("OPTIMIZE TABLE %s.%s FINAL", config.Clickhouse.Database, table)
+		if err := Clickhouse.Exec(context.Background(), query); err != nil {
+			utils.Error.Println("Failed to optimize Clickhouse table:", err)
+		}
+
+		utils.Info.Printf(
+			"Optimized Clickhouse table %s.%s",
+			config.Clickhouse.Database,
+			table,
+		)
+
+		time.Sleep(5 * time.Second)
+	}
 }

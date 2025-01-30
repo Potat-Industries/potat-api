@@ -93,7 +93,16 @@ func NewNormalEmote(
 	platform Platforms,
 ) (*NormalEmote, error) {
 	if setID == "" {
-		return nil, errors.New("set ID is required")
+		emote, ok := emoteData.(NormalEmote)
+		if !ok {
+			return nil, errors.New("invalid data for normal emote")
+		}
+
+		if emote.SetID == "" {
+			return nil, errors.New("set id is required")
+		} else {
+			setID = emote.SetID
+		}
 	}
 
 	emote := &NormalEmote{
@@ -165,6 +174,10 @@ func NewNormalEmote(
 
 	default:
 		return nil, errors.New("invalid normal emote provider provided")
+	}
+
+	if emote.ID == "" || emote.Name == "" {
+		return nil, errors.New("emote is missing id or name")
 	}
 
 	return emote, nil
