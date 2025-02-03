@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   lint-go:
-    name: Go
+    name: Go Lint
     permissions:
       contents: read
       pull-requests: read
