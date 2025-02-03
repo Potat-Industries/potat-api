@@ -1,0 +1,30 @@
+
+name: Go mod tidy
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Tidy check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+      - name: Check
+        run: |
+          go mod download
+          go mod tidy
+          if ! git diff --exit-code
+          then
+            echo "Not go mod tidied"
+            exit 1
+          fi

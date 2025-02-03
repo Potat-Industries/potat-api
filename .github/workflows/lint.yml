@@ -1,0 +1,31 @@
+name: Lint
+on:
+  workflow_call:
+    inputs:
+      goassets-ref:
+        default: master
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  lint-go:
+    name: Go
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - uses: actions/checkout@v4
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.63.4
