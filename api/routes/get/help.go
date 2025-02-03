@@ -75,7 +75,6 @@ func getCommandsCallback(w http.ResponseWriter, start time.Time) func ([]byte) {
 		api.GenericResponse(w, http.StatusOK, HelpResponse{
 			Data: &filteredCommands,
 		}, start)
-		return
 	}
 }
 

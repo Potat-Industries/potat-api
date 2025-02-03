@@ -77,6 +77,7 @@ func (c *Client) sendMessage(messageType int, data []byte) error {
 	return nil
 }
 
+//nolint:unused // todo: remove?
 func (c *Client) sendEvent(opcode EventCodes, topic string, data any) error {
 	response := &PotatMessage{
 		Opcode: opcode,
