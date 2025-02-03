@@ -1,11 +1,9 @@
 name: Lint
 on:
-  workflow_call:
-    inputs:
-      goassets-ref:
-        default: master
-        required: false
-        type: string
+  push:
+    branches:
+      - main
+  pull_request:
 
 permissions:
   contents: read
