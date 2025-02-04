@@ -18,7 +18,10 @@ var (
 	connString string
 )
 
-func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
+func CreateBroker(
+	config common.Config,
+	parentContext context.Context,
+) (func(), error) {
 	user := config.RabbitMQ.User
 	if user == "" {
 		user = "guest"
@@ -43,26 +46,29 @@ func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
 		"amqp://%s:%s@%s:%s/", user, password, host, port,
 	)
 
-	var err error
-	Conn, err = getConnection()
-	if err != nil {
-		return nil, err
-	}
-	Info.Printf("Connected to RabbitMQ")
+	ctx, cancelConsumer := context.WithCancel(parentContext)
 
-	err = PublishToQueue(
-		context.Background(),
-		"connected",
-		5 * time.Second,
-	)
-	if err != nil {
-		return nil, err
-	}
+	go func() {
+		for {
+			err := runBroker(ctx)
+			if err != nil {
+				Warn.Printf("RabbitMQ connection error: %v", err)
+			}
 
-	err = consumeFromQueue(ctx)
-	if err != nil {
-		return nil, err
-	}
+			select {
+			case <-parentContext.Done():
+				return
+			default: {
+				Warn.Println("RabbitMQ connection lost, reconnecting...")
+				cancelConsumer()
+
+				time.Sleep(5 * time.Second)
+
+				ctx, cancelConsumer = context.WithCancel(parentContext)
+			}
+			}
+		}
+	}()
 
 	cleanup := func() {
 		if Conn != nil {
@@ -72,6 +78,67 @@ func CreateBroker(config common.Config, ctx context.Context) (func(), error) {
 	}
 
 	return cleanup, nil
+}
+
+func runBroker(ctx context.Context) error {
+	var err error
+	Conn, err = getConnection()
+	if err != nil {
+			return err
+	}
+	Info.Printf("Connected to RabbitMQ")
+
+	err = PublishToQueue(
+		context.Background(),
+		"connected",
+		5 * time.Second,
+	)
+	if err != nil {
+		return err
+	}
+
+	ch, err := Conn.Channel()
+	if err != nil {
+			return err
+	}
+
+	queue, err := declare("potat-api", ch)
+	if err != nil {
+			return err
+	}
+	proxyQueue, err := declare("proxy-socket", ch)
+	if err != nil {
+			return err
+	}
+	err = ch.QueueBind(queue.Name, queue.Name, "potat-api", false, nil)
+	if err != nil {
+			return err
+	}
+
+	msgs, err := consume(ctx, queue, ch)
+	if err != nil {
+			return err
+	}
+	proxyMsgs, err := consume(ctx, proxyQueue, ch)
+	if err != nil {
+			return err
+	}
+
+	go processQueue(ctx, msgs, proxyMsgs)
+
+	notifyClose := make(chan *amqp.Error, 1)
+	ch.NotifyClose(notifyClose)
+
+	select {
+	case <-ctx.Done():
+			Info.Println("Consumer context canceled")
+			return nil
+	case err := <-notifyClose:
+			if err != nil {
+					Warn.Printf("Channel closed: %v", err)
+			}
+			return err
+	}
 }
 
 func getConnection() (*amqp.Connection, error) {
@@ -122,101 +189,54 @@ func consume(
 	)
 }
 
-func consumeFromQueue(
-	ctx context.Context,
-) error {
-	if Conn == nil {
-		Warn.Println("RabbitMQ connection not established")
-		return nil
-	}
+func processQueue(ctx context.Context, msgs, proxyMsgs <-chan amqp.Delivery) {
+	for {
+		select {
+		case <-ctx.Done():
+			return;
+		case msg := <-msgs:
+			if msg.Body == nil {
+				_ = msg.Reject(false)
+				continue
+			}
 
-	ch, err := Conn.Channel()
-	if err != nil {
-		return err
-	}
-
-	queue, err := declare("potat-api", ch)
-	if err != nil {
-		return err
-	}
-
-	proxyQueue, err := declare("proxy-socket", ch)
-	if err != nil {
-		return err
-	}
-
-	err = ch.QueueBind(
-		queue.Name,
-		queue.Name,
-		"potat-api",
-		false,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-
-	msgs, err := consume(ctx, queue, ch)
-	if err != nil {
-		return err
-	}
-
-	proxyMsgs, err := consume(ctx, proxyQueue, ch)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-    for {
-			select {
-			case <-ctx.Done():
-				return;
-			case msg := <-msgs:
-				if msg.Body == nil {
-					_ = msg.Reject(false)
-					continue
-				}
-
-				if msg.CorrelationId == "potatbotat" {
-					err := msg.Ack(false)
-					if err != nil {
-						Warn.Printf("Failed to acknowledge message: %v", err)
-					} else {
-						handleMessage(string(msg.Body))
-					}
+			if msg.CorrelationId == "potatbotat" {
+				err := msg.Ack(false)
+				if err != nil {
+					Warn.Printf("Failed to acknowledge message: %v", err)
 				} else {
-					err := msg.Reject(true)
-					if err != nil {
-						Warn.Printf("Failed to reject and requeue message: %v", err)
-					}
+					handleMessage(string(msg.Body))
 				}
-			case msg := <-proxyMsgs:
-				if msg.Body == nil {
-					_ = msg.Reject(false)
-					continue
-				}
-
-				if proxySocketFn != nil {
-					err := msg.Ack(false)
-					if err != nil {
-						Warn.Printf("Failed to acknowledge message: %v", err)
-					}
-					err = proxySocketFn(string(msg.Body))
-					if err != nil {
-						Warn.Printf("Failed to send message to socket: %v", err)
-					}
-				} else {
-					Warn.Println("Proxy socket function not set")
-					err := msg.Reject(true)
-					if err != nil {
-						Warn.Printf("Failed to acknowledge message: %v", err)
-					}
+			} else {
+				err := msg.Reject(true)
+				if err != nil {
+					Warn.Printf("Failed to reject and requeue message: %v", err)
 				}
 			}
-    }
-	}()
+		case msg := <-proxyMsgs:
+			if msg.Body == nil {
+				_ = msg.Reject(false)
+				continue
+			}
 
-	return nil
+			if proxySocketFn != nil {
+				err := msg.Ack(false)
+				if err != nil {
+					Warn.Printf("Failed to acknowledge message: %v", err)
+				}
+				err = proxySocketFn(string(msg.Body))
+				if err != nil {
+					Warn.Printf("Failed to send message to socket: %v", err)
+				}
+			} else {
+				Warn.Println("Proxy socket function not set")
+				err := msg.Reject(true)
+				if err != nil {
+					Warn.Printf("Failed to acknowledge message: %v", err)
+				}
+			}
+		}
+	}
 }
 
 func handleMessage(message string) {
