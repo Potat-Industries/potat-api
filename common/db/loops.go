@@ -85,7 +85,6 @@ func StartLoops(config common.Config) {
 
 	c.Start()
 
-	go optimizeClickhouse()
 	go decrementDuels()
 	go deleteOldUploads()
 	go updateAggregateTable()
