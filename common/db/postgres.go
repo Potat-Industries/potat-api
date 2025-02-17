@@ -705,7 +705,7 @@ func (db *DB) NewUpload(
 func (db *DB) GetFileByKey(
 	ctx context.Context,
 	key string,
-) ([]byte, string, string, *time.Time, error) {
+) ([]byte, string, *string, *time.Time, error) {
 	query := `
 		SELECT file, mime_type, file_name, created_at
 		FROM file_store
@@ -714,7 +714,7 @@ func (db *DB) GetFileByKey(
 
 	var content []byte
 	var mimeType string
-	var fileName string
+	var fileName *string
 	var createdAt time.Time
 
 	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(
@@ -724,7 +724,7 @@ func (db *DB) GetFileByKey(
 		&createdAt,
 	)
 	if err != nil {
-		return nil, "", "", nil, err
+		return nil, "", nil, nil, err
 	}
 
 	return content, mimeType, fileName, &createdAt, nil

@@ -204,14 +204,22 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, mimeType, name, _, err := db.Postgres.GetFileByKey(r.Context(), key)
-	if err != nil {
+	if err == db.PostgresNoRows {
 		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+
+	if err != nil {
+		utils.Warn.Printf("Failed to get document: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	go setRedis(key, data)
 
-	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
+	if name != nil {
+		w.Header().Set("Content-Disposition", "inline; filename=\""+*name+"\"")
+	}
 	w.Header().Set("Content-Type", mimeType)
 	_, err = w.Write(data)
 	if err != nil {
