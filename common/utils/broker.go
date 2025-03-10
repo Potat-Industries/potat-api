@@ -197,6 +197,16 @@ func processQueue(ctx context.Context, msgs, proxyMsgs <-chan amqp.Delivery) {
 		case msg := <-msgs:
 			if msg.Body == nil {
 				_ = msg.Reject(false)
+
+				continue
+			}
+
+			if msg.Exchange == "potat-streamer" {
+				err := msg.Reject(true) 
+				if err != nil {
+					Warn.Printf("Failed to reject and requeue message: %v", err)
+				}
+
 				continue
 			}
 
@@ -216,6 +226,7 @@ func processQueue(ctx context.Context, msgs, proxyMsgs <-chan amqp.Delivery) {
 		case msg := <-proxyMsgs:
 			if msg.Body == nil {
 				_ = msg.Reject(false)
+
 				continue
 			}
 
