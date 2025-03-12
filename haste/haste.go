@@ -38,9 +38,9 @@ var allowedTypes = []string{
 }
 
 var (
-	keyLength  int
-	server     *http.Server
-	router     *mux.Router
+	keyLength int
+	server    *http.Server
+	router    *mux.Router
 )
 
 func init() {
@@ -49,7 +49,7 @@ func init() {
 
 	router = mux.NewRouter()
 
-	limiter := middleware.NewRateLimiter(100, 1 * time.Minute)
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
 	router.Use(middleware.LogRequest)
 	router.Use(limiter)
 
@@ -76,7 +76,7 @@ func StartServing(config common.Config) error {
 	}
 
 	server = &http.Server{
-		Handler:     router,
+		Handler:      router,
 		Addr:         config.Haste.Host + ":" + config.Haste.Port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
@@ -85,13 +85,13 @@ func StartServing(config common.Config) error {
 
 	db.Postgres.CheckTableExists(createTable)
 
-	utils.Info.Printf("Haste listening on %s",server.Addr)
+	utils.Info.Printf("Haste listening on %s", server.Addr)
 
 	return server.ListenAndServe()
 }
 
 func Stop() {
-	if err :=server.Shutdown(context.Background()); err != nil {
+	if err := server.Shutdown(context.Background()); err != nil {
 		utils.Error.Fatalf("Failed to shutdown server: %v", err)
 	}
 }
@@ -277,7 +277,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-  err = json.NewEncoder(w).Encode(map[string]string{"key": key})
+	err = json.NewEncoder(w).Encode(map[string]string{"key": key})
 	if err != nil {
 		utils.Warn.Println("Failed to write response: ", err)
 	}

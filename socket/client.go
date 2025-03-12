@@ -1,10 +1,10 @@
 package socket
 
 import (
+	"encoding/json"
+	"net/http"
 	"sync"
 	"time"
-	"net/http"
-	"encoding/json"
 
 	"potat-api/common/utils"
 
@@ -12,17 +12,17 @@ import (
 )
 
 const (
-	writeWait = 10 * time.Second
-	pongWait = time.Minute
-	pingPeriod = (pongWait * 9) / 10
+	writeWait      = 10 * time.Second
+	pongWait       = time.Minute
+	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 512
-	socketTTL = time.Hour
+	socketTTL      = time.Hour
 )
 
 type EventCodes uint16
 
 const (
-	HELLO 				 EventCodes = 4444
+	HELLO          EventCodes = 4444
 	RECIEVED_DATA  EventCodes = 4000
 	RECONNECT      EventCodes = 4001
 	UNKNOWN_ERROR  EventCodes = 4002
@@ -42,19 +42,19 @@ var upgrader = websocket.Upgrader{
 }
 
 type PotatMessage struct {
-	Opcode EventCodes `json:"opcode"`
+	Data   any        `json:"data"`
 	Topic  string     `json:"topic"`
-	Data	 any        `json:"data"`
+	Opcode EventCodes `json:"opcode"`
 }
 
 type Client struct {
-	hub *Hub
-	conn *websocket.Conn
-	send chan []byte
-	id string
-	writeMutex sync.Mutex
-	closeOnce   sync.Once
+	hub         *Hub
+	conn        *websocket.Conn
+	send        chan []byte
 	closeSignal chan struct{}
+	id          string
+	closeOnce   sync.Once
+	writeMutex  sync.Mutex
 }
 
 func (c *Client) sendJSON(data *PotatMessage) error {
@@ -72,7 +72,6 @@ func (c *Client) sendMessage(messageType int, data []byte) error {
 	if err := c.conn.WriteMessage(messageType, data); err != nil {
 		return err
 	}
-
 
 	return nil
 }
@@ -102,7 +101,7 @@ func (c *Client) writePingPumperDumper9000() {
 
 	defer func() {
 		ttlTicker.Stop()
-	  pingTicker.Stop()
+		pingTicker.Stop()
 	}()
 
 	for {
@@ -228,4 +227,3 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	utils.Info.Printf("Potat socket connection from %s", actor)
 }
-

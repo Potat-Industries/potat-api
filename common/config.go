@@ -6,7 +6,7 @@ var UserLevels = struct {
 	Mod         int
 	User        int
 	Developer   int
-} {
+}{
 	Blacklisted: 0,
 	Admin:       1,
 	Mod:         2,
@@ -17,22 +17,22 @@ var UserLevels = struct {
 type Config struct {
 	Postgres   SQLConfig      `json:"postgres"`
 	Clickhouse SQLConfig      `json:"clickhouse"`
+	Twitch     TwitchConfig   `json:"twitch"`
+	Redis      RedisConfig    `json:"redis"`
+	RabbitMQ   RabbitMQConfig `json:"rabbitmq"`
 	API        APIConfig      `json:"api"`
-	Socket 	 	 APIConfig      `json:"socket"`
+	Socket     APIConfig      `json:"socket"`
 	Redirects  APIConfig      `json:"redirects"`
 	Uploader   APIConfig      `json:"uploader"`
 	Prometheus APIConfig      `json:"prometheus"`
-	Redis      RedisConfig    `json:"redis"`
-	RabbitMQ   RabbitMQConfig `json:"rabbitmq"`
 	Haste      HasteConfig    `json:"haste"`
 	Loops      LoopsConfig    `json:"loops"`
-	Twitch     TwitchConfig   `json:"twitch"`
 }
 
 type TwitchConfig struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
-	OauthURI  	 string `json:"oauth_uri"`
+	OauthURI     string `json:"oauth_uri"`
 }
 
 type LoopsConfig struct {

@@ -51,31 +51,31 @@ func filterCommands(commands []common.Command) []common.Command {
 		}
 		filteredCommands = append(filteredCommands, command)
 	}
+
 	return filteredCommands
 }
 
-func getCommandsCallback(w http.ResponseWriter, start time.Time) func ([]byte) {
-	return func(data []byte) {
-		var commandsJson []common.Command
-		err := json.Unmarshal(data, &commandsJson)
-		if err != nil {
-			utils.Error.Printf("Error unmarshalling commands: %v", err)
-			api.GenericResponse(w, http.StatusInternalServerError, HelpResponse{
-				Data: &[]common.Command{},
-				Errors: &[]common.ErrorMessage{{Message: "Error unmarshalling commands"}},
-			}, start)
-			return
-		}
-		filteredCommands := filterCommands(commandsJson)
-
-		if (len(filteredCommands) > 0) {
-			go setCache("website:commands", data)
-		}
-
-		api.GenericResponse(w, http.StatusOK, HelpResponse{
-			Data: &filteredCommands,
+func getCommands(w http.ResponseWriter, start time.Time, data []byte) {
+	var commandsJson []common.Command
+	err := json.Unmarshal(data, &commandsJson)
+	if err != nil {
+		utils.Error.Printf("Error unmarshalling commands: %v", err)
+		api.GenericResponse(w, http.StatusInternalServerError, HelpResponse{
+			Data:   &[]common.Command{},
+			Errors: &[]common.ErrorMessage{{Message: "Error unmarshalling commands"}},
 		}, start)
+
+		return
 	}
+	filteredCommands := filterCommands(commandsJson)
+
+	if len(filteredCommands) > 0 {
+		go setCache("website:commands", data)
+	}
+
+	api.GenericResponse(w, http.StatusOK, HelpResponse{
+		Data: &filteredCommands,
+	}, start)
 }
 
 func getCommandsHandler(w http.ResponseWriter, r *http.Request) {
@@ -87,23 +87,26 @@ func getCommandsHandler(w http.ResponseWriter, r *http.Request) {
 		api.GenericResponse(w, http.StatusOK, HelpResponse{
 			Data: cache,
 		}, start)
+
 		return
 	} else {
 		w.Header().Set("X-Cache-Hit", "MISS")
 	}
 
-	err = utils.RequestManager(
+	response, err := utils.BridgeRequest(
 		r.Context(),
-		5 * time.Second,
+		5*time.Second,
 		"get-commands",
-		getCommandsCallback(w, start),
 	)
 	if err != nil {
 		utils.Error.Printf("Error getting commands: %v", err)
 		api.GenericResponse(w, http.StatusInternalServerError, HelpResponse{
-			Data: &[]common.Command{},
+			Data:   &[]common.Command{},
 			Errors: &[]common.ErrorMessage{{Message: "Error getting commands"}},
 		}, start)
+
 		return
 	}
+
+	getCommands(w, start, response)
 }

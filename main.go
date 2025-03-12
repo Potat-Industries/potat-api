@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"potat-api/api"
-	"potat-api/haste"
-	"potat-api/socket"
 	"potat-api/common"
-	"potat-api/uploader"
-	"potat-api/redirects"
 	"potat-api/common/db"
 	"potat-api/common/utils"
+	"potat-api/haste"
+	"potat-api/redirects"
+	"potat-api/socket"
+	"potat-api/uploader"
 
 	_ "potat-api/api/routes/get"
 	_ "potat-api/api/routes/post"
@@ -35,13 +35,14 @@ func main() {
 		initClickhouse(*config, ctx)
 	}
 
+	var nats *utils.NatsClient
 	if config.RabbitMQ.Enabled {
-		cleanup := initRabbitMQ(*config, ctx)
-		defer cleanup()
+		nats = initNats(ctx)
+		defer nats.Stop()
 	}
 
 	if config.Loops.Enabled {
-		go db.StartLoops(*config)
+		go db.StartLoops(*config, nats)
 	}
 
 	utils.Info.Println("Startup complete, serving APIs...")
@@ -57,7 +58,7 @@ func main() {
 	socketChan := make(chan error)
 	if config.Socket.Enabled {
 		go func() {
-			socketChan <- socket.StartServing(*config)
+			socketChan <- socket.StartServing(*config, nats)
 		}()
 	}
 
@@ -127,15 +128,15 @@ func main() {
 func runWithTimeout(
 	f func(ctx context.Context) error,
 	ctx context.Context,
-	) error {
+) error {
 	done := make(chan error, 1)
 
 	var lastError error
 	for i := 0; i < 3; i++ {
-		attemptCtx, cancel := context.WithTimeout(ctx, 1 * time.Second)
+		attemptCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 		defer cancel()
 
-		go func() {	done <- f(attemptCtx) }()
+		go func() { done <- f(attemptCtx) }()
 
 		select {
 		case err := <-done:
@@ -187,11 +188,11 @@ func initClickhouse(config common.Config, ctx context.Context) {
 	utils.Info.Println("Clickhouse initialized")
 }
 
-func initRabbitMQ(config common.Config, ctx context.Context) func() {
-	cleanup, err := utils.CreateBroker(config, ctx)
+func initNats(ctx context.Context) *utils.NatsClient {
+	nats, err := utils.CreateNatsBroker(ctx)
 	if err != nil {
 		utils.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
 	}
 
-	return cleanup
+	return nats
 }

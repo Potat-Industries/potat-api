@@ -1,15 +1,15 @@
 package redirects
 
 import (
-	"time"
-	"strings"
 	"context"
 	"net/http"
+	"strings"
+	"time"
 
+	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"potat-api/api/middleware"
 
 	"github.com/gorilla/mux"
 )
@@ -27,7 +27,7 @@ var router *mux.Router
 func init() {
 	router = mux.NewRouter()
 
-	limiter := middleware.NewRateLimiter(100, 1 * time.Minute)
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
 	router.Use(middleware.LogRequest)
 	router.Use(limiter)
 	router.HandleFunc("/{id}", getRedirect).Methods(http.MethodGet)

@@ -12,8 +12,8 @@ import (
 
 type loggingResponseWriter struct {
 	http.ResponseWriter
-	statusCode int
 	headers    http.Header
+	statusCode int
 }
 
 func (lrw *loggingResponseWriter) WriteHeader(code int) {
@@ -52,7 +52,7 @@ func LogRequest(next http.Handler) http.Handler {
 
 		line := fmt.Sprintf(
 			"Host: %s | %s %s | Cache %s | Status: %d | Duration: %v | User-Agent: %s",
-		  	r.Host,
+			r.Host,
 			r.Method,
 			r.RequestURI,
 			cachehit,

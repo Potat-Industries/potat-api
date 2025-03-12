@@ -20,14 +20,14 @@ type DB struct {
 }
 
 type LoaderKey struct {
-	ID 			 *int
-	UserID 	 *string
+	ID       *int
+	UserID   *string
 	Username *string
 	Platform *string
 }
 
 var (
-	Postgres *DB
+	Postgres       *DB
 	PostgresNoRows = pgx.ErrNoRows
 )
 
@@ -170,7 +170,7 @@ func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*common.User, er
 	return &user, nil
 }
 
-func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) (*[]common.Block) {
+func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {
 	query := `
 		SELECT
 		  user_id
@@ -334,7 +334,6 @@ func (db *DB) GetChannelByID(
 		}
 	}()
 
-
 	var blocks []common.Block
 	go func() {
 		defer wg.Done()
@@ -423,7 +422,6 @@ func (db *DB) GetChannelByName(
 			commands = cmds
 		}
 	}()
-
 
 	var blocks []common.Block
 	go func() {
@@ -553,7 +551,7 @@ func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.Potat
 func (db *DB) BatchUserConections(
 	ctx context.Context,
 	IDs []int,
-) (*map[int][]common.UserConnection) {
+) *map[int][]common.UserConnection {
 	query := `
 		SELECT
 			user_id,
@@ -683,7 +681,7 @@ func encode(data string) string {
 func (db *DB) NewUpload(
 	ctx context.Context,
 	key string,
-  file []byte,
+	file []byte,
 	name string,
 	mimeType string,
 ) (bool, *time.Time) {

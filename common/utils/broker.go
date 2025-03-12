@@ -4,391 +4,147 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"potat-api/common"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	amqp "github.com/rabbitmq/amqp091-go"
+	nats "github.com/nats-io/nats.go"
 )
 
-var (
-	Conn *amqp.Connection
-	proxySocketFn func(string) error
-	connString string
-)
+type NatsClient struct {
+	client        *nats.Conn
+	proxySocketFn func([]byte) error
+}
 
-func CreateBroker(
-	config common.Config,
+func CreateNatsBroker(
 	parentContext context.Context,
-) (func(), error) {
-	user := config.RabbitMQ.User
-	if user == "" {
-		user = "guest"
+) (*NatsClient, error) {
+	nc, err := nats.Connect(nats.DefaultURL)
+	if err != nil {
+		return &NatsClient{}, err
 	}
 
-	password := config.RabbitMQ.Password
-	if password == "" {
-		password = "guest"
+	client := NatsClient{
+		client: nc,
 	}
 
-	host := config.RabbitMQ.Host
-	if host == "" {
-		host = "localhost"
-	}
-
-	port := config.RabbitMQ.Port
-	if port == "" {
-		port = "5672"
-	}
-
-	connString = fmt.Sprintf(
-		"amqp://%s:%s@%s:%s/", user, password, host, port,
-	)
-
-	ctx, cancelConsumer := context.WithCancel(parentContext)
+	ctx, cancel := context.WithCancel(parentContext)
 
 	go func() {
 		for {
-			err := runBroker(ctx)
+			err := client.subNatsStream(ctx)
 			if err != nil {
-				Warn.Printf("RabbitMQ connection error: %v", err)
+				Warn.Printf("NATS connection error: %v", err)
 			}
 
 			select {
 			case <-parentContext.Done():
 				return
-			default: {
-				Warn.Println("RabbitMQ connection lost, reconnecting...")
-				cancelConsumer()
+			default:
+				{
+					Warn.Println("NATS connection lost, reconnecting...")
+					cancel()
 
-				time.Sleep(5 * time.Second)
+					time.Sleep(5 * time.Second)
 
-				ctx, cancelConsumer = context.WithCancel(parentContext)
-			}
+					ctx, cancel = context.WithCancel(parentContext)
+				}
 			}
 		}
 	}()
 
-	cleanup := func() {
-		if Conn != nil {
-			_ = Conn.Close()
-			Warn.Printf("RabbitMQ connection closed")
-		}
-	}
-
-	return cleanup, nil
+	return &client, nil
 }
 
-func runBroker(ctx context.Context) error {
-	var err error
-	Conn, err = getConnection()
-	if err != nil {
-			return err
-	}
-	Info.Printf("Connected to RabbitMQ")
-
-	err = PublishToQueue(
-		context.Background(),
-		"connected",
-		5 * time.Second,
-	)
+func (n *NatsClient) subNatsStream(ctx context.Context) error {
+	sub, err := n.client.Subscribe("potatbotat.>", n.handleMessage)
 	if err != nil {
 		return err
 	}
+	defer sub.Unsubscribe()
 
-	ch, err := Conn.Channel()
-	if err != nil {
-			return err
-	}
+	n.client.Publish("potat-api.connected", []byte(nil))
 
-	queue, err := declare("potat-api", ch)
-	if err != nil {
-			return err
-	}
-	proxyQueue, err := declare("proxy-socket", ch)
-	if err != nil {
-			return err
-	}
-	err = ch.QueueBind(queue.Name, queue.Name, "potat-api", false, nil)
-	if err != nil {
-			return err
-	}
+	<-ctx.Done()
 
-	msgs, err := consume(ctx, queue, ch)
-	if err != nil {
-			return err
-	}
-	proxyMsgs, err := consume(ctx, proxyQueue, ch)
-	if err != nil {
-			return err
-	}
-
-	go processQueue(ctx, msgs, proxyMsgs)
-
-	notifyClose := make(chan *amqp.Error, 1)
-	ch.NotifyClose(notifyClose)
-
-	select {
-	case <-ctx.Done():
-			Info.Println("Consumer context canceled")
-			return nil
-	case err := <-notifyClose:
-			if err != nil {
-					Warn.Printf("Channel closed: %v", err)
-			}
-			return err
-	}
-}
-
-func getConnection() (*amqp.Connection, error) {
-	conn, err := amqp.Dial(connString)
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
-}
-
-func SetProxySocketFn(fn func(string) error) {
-	proxySocketFn = fn
-}
-
-func Stop() {
-	if Conn != nil {
-		_ = Conn.Close()
-		Warn.Printf("RabbitMQ connection closed")
-	}
-}
-
-func declare(queue string, channel *amqp.Channel) (amqp.Queue, error) {
-	return channel.QueueDeclare(
-		queue,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-}
-
-func consume(
-	ctx context.Context,
-	queue amqp.Queue,
-	channel *amqp.Channel,
-) (<-chan amqp.Delivery, error) {
-	return channel.ConsumeWithContext(
-		ctx,
-		queue.Name,
-		"",
-		false,
-		false,
-		true,
-		false,
-		nil,
-	)
-}
-
-func processQueue(ctx context.Context, msgs, proxyMsgs <-chan amqp.Delivery) {
-	for {
-		select {
-		case <-ctx.Done():
-			return;
-		case msg := <-msgs:
-			if msg.Body == nil {
-				_ = msg.Reject(false)
-
-				continue
-			}
-
-			if msg.Exchange == "potat-streamer" {
-				err := msg.Reject(true) 
-				if err != nil {
-					Warn.Printf("Failed to reject and requeue message: %v", err)
-				}
-
-				continue
-			}
-
-			if msg.CorrelationId == "potatbotat" {
-				err := msg.Ack(false)
-				if err != nil {
-					Warn.Printf("Failed to acknowledge message: %v", err)
-				} else {
-					handleMessage(string(msg.Body))
-				}
-			} else {
-				err := msg.Reject(true)
-				if err != nil {
-					Warn.Printf("Failed to reject and requeue message: %v", err)
-				}
-			}
-		case msg := <-proxyMsgs:
-			if msg.Body == nil {
-				_ = msg.Reject(false)
-
-				continue
-			}
-
-			if proxySocketFn != nil {
-				err := msg.Ack(false)
-				if err != nil {
-					Warn.Printf("Failed to acknowledge message: %v", err)
-				}
-				err = proxySocketFn(string(msg.Body))
-				if err != nil {
-					Warn.Printf("Failed to send message to socket: %v", err)
-				}
-			} else {
-				Warn.Println("Proxy socket function not set")
-				err := msg.Reject(true)
-				if err != nil {
-					Warn.Printf("Failed to acknowledge message: %v", err)
-				}
-			}
-		}
-	}
-}
-
-func handleMessage(message string) {
-	if message == "" {
-		return
-	}
-	parts := strings.Split(message, ":")
-
-	var topic string
-	if len(parts) >= 1 {
-		topic = parts[0]
-		message = strings.Join(parts[1:], ":")
-	} else {
-		topic = message
-	}
-
-	Debug.Printf("[x] Received %s", message)
-
-	switch topic {
-	case "ping":
-	  err := PublishToQueue(context.Background(), "pong", 5 * time.Second)
-	  if err != nil {
-			Warn.Printf("Failed to send pong: %v", err)
-		}
-	case "pong":
-		Debug.Println("PotatBotat Reconnected to API")
-		err := PublishToQueue(context.Background(), "ping", 5 * time.Second)
-		if err != nil {
-			Warn.Printf("Failed to send ping: %v", err)
-		}
-	default:
-		Debug.Printf("[x] Unrecognized topic: %s", topic)
-	}
-}
-
-func PublishToQueue(
-	ctx context.Context,
-	message string,
-	ttl time.Duration,
-) error {
-	if Conn == nil {
-		Warn.Println("RabbitMQ connection not established")
-		return nil
-	}
-
-	ch, err := Conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	ctx, cancel := context.WithTimeout(ctx, ttl + time.Second)
-	defer cancel()
-
-	err = ch.PublishWithContext(ctx,
-		"potat-api",
-		"potat-api",
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: 	 	"text/plain",
-			Body:        	 	[]byte(message),
-			CorrelationId: 	"potat-api",
-			Expiration:  	 	fmt.Sprintf("%d", ttl.Milliseconds()),
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	Debug.Printf("[x] Sent %s", message)
 	return nil
 }
 
-func RequestManager(
+func (n *NatsClient) SetProxySocketFn(fn func([]byte) error) {
+	n.proxySocketFn = fn
+}
+
+func (n *NatsClient) Stop() {
+	if n.client != nil {
+		if err := n.client.Drain(); err != nil {
+			Error.Printf("Failed to drain NATS connection: %v", err)
+		}
+		Warn.Println("NATS connection closed")
+	}
+}
+
+func (n *NatsClient) Publish(topic string, data []byte) error {
+	if n.client == nil {
+		return errors.New("NATS connection not established")
+	}
+
+	err := n.client.Publish(topic, data)
+	if err != nil {
+		return err
+	}
+	Debug.Printf("[x] Sent %s", data)
+
+	return nil
+}
+
+func (n *NatsClient) handleMessage(message *nats.Msg) {
+	if message == nil {
+		return
+	}
+
+	switch message.Subject {
+	case "potatbotat.ping":
+		err := n.Publish("potat-api.pong", []byte(nil))
+		if err != nil {
+			Warn.Printf("Failed to send pong: %v", err)
+		}
+	case "potatbotat.pong":
+		Debug.Println("PotatBotat Reconnected to API")
+		err := n.Publish("potat-api.ping", []byte(nil))
+		if err != nil {
+			Warn.Printf("Failed to send ping: %v", err)
+		}
+	case "potatbotat.proxy-socket":
+		if n.proxySocketFn != nil {
+			err := n.proxySocketFn(message.Data)
+			if err != nil {
+				Warn.Printf("Failed to proxy socket: %v", err)
+			}
+		}
+
+		break;
+	case "potatbotat.api-request":
+	default:
+		Debug.Printf("[x] Unrecognized topic: %s", message.Subject)
+	}
+}
+
+func BridgeRequest(
 	ctx context.Context,
 	ttl time.Duration,
 	request string,
-	callback func([]byte),
-) error {
-	if request == "" {
-		return errors.New("empty request")
-	}
-
-	ch, err := Conn.Channel()
+) ([]byte, error) {
+	nc, err := nats.Connect(nats.DefaultURL)
 	if err != nil {
-		return fmt.Errorf("failed to open RabbitMQ channel: %w", err)
+		return nil, fmt.Errorf("failed to publish request: %w", err)
 	}
 
-	defer func() {
-		err := ch.Close()
-		if err != nil {
-			Warn.Printf("Failed to close channel: %v", err)
-		}
-	}()
-
-	queue, err := declare("job-requests", ch)
-	if err != nil {
-		return fmt.Errorf("failed to declare reply queue: %w", err)
-	}
-
-	msgs, err := consume(ctx, queue, ch)
-	if err != nil {
-		return fmt.Errorf("failed to consume from reply queue: %w", err)
-	}
-
-	correlationID := uuid.New().String()
-
-	err = ch.PublishWithContext(
-		ctx,
-		"job-requests",
-		"job-requests",
-		false,
-		false,
-		amqp.Publishing{
-			ContentType:   "text/plain",
-			CorrelationId: correlationID,
-			ReplyTo:       "job-requests",
-			Body:          []byte(request),
-			Expiration:    fmt.Sprintf("%d", ttl.Milliseconds()),
-		},
+	response, err := nc.Request(
+		"potat-api.job-request",
+		[]byte(request),
+		ttl,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to publish request: %w", err)
+		return nil, fmt.Errorf("failed to publish request: %w", err)
 	}
 
-	timeout := time.NewTimer(ttl)
-	defer timeout.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timeout.C:
-			return fmt.Errorf("request timed out after %s", ttl)
-		case msg := <-msgs:
-			if msg.CorrelationId == correlationID {
-				callback(msg.Body)
-				timeout.Stop()
-				return nil
-			}
-		}
-	}
+	return response.Data, nil
 }

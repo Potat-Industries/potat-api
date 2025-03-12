@@ -16,13 +16,13 @@ type Logger struct {
 
 type LogLevel struct {
 	text color.Attribute
-	tag color.Attribute
+	tag  color.Attribute
 }
 
 var (
 	INFO  = LogLevel{text: color.FgHiGreen, tag: color.BgHiGreen}
-	DEBUG	= LogLevel{text: color.FgCyan, tag: color.BgCyan}
-	WARN 	= LogLevel{text: color.FgYellow, tag: color.BgYellow}
+	DEBUG = LogLevel{text: color.FgCyan, tag: color.BgCyan}
+	WARN  = LogLevel{text: color.FgYellow, tag: color.BgYellow}
 	ERROR = LogLevel{text: color.FgRed, tag: color.BgRed}
 )
 
@@ -93,8 +93,8 @@ func (l *Logger) levelString() string {
 }
 
 var (
-	Info 	= New(LogLevel(INFO))
-	Warn	= New(LogLevel(WARN))
-	Debug	= New(LogLevel(DEBUG))
-	Error	= New(LogLevel(ERROR))
+	Info  = New(LogLevel(INFO))
+	Warn  = New(LogLevel(WARN))
+	Debug = New(LogLevel(DEBUG))
+	Error = New(LogLevel(ERROR))
 )

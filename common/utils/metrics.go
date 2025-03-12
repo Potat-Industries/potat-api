@@ -5,8 +5,8 @@ import (
 	"potat-api/common"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -28,14 +28,14 @@ func ObserveMetrics(config common.Config) error {
 	connString := config.Prometheus.Host + ":" + config.Prometheus.Port
 	Info.Printf("Metrics listening on %s", connString)
 
-	return http.ListenAndServe(connString, nil);
+	return http.ListenAndServe(connString, nil)
 }
 
 func ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string) {
 	if httpRequestCounter == nil {
 		return
 	}
-	
+
 	httpRequestCounter.WithLabelValues(
 		host,
 		endpoint,

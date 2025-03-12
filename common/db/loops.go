@@ -1,17 +1,17 @@
 package db
 
 import (
-	"os"
-	"fmt"
-	"time"
-	"sort"
 	"bytes"
 	"context"
-	"errors"
-	"os/exec"
-	"runtime"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sort"
+	"time"
 
 	"potat-api/common"
 	"potat-api/common/utils"
@@ -20,15 +20,15 @@ import (
 )
 
 var (
-	maxFiles = 10
-	dumpPath = "./dump"
-	dbName   = ""
-	dbUser   = ""
-	dbHost   = ""
+	maxFiles   = 10
+	dumpPath   = "./dump"
+	dbName     = ""
+	dbUser     = ""
+	dbHost     = ""
 	pgPassword = ""
 )
 
-func StartLoops(config common.Config) {
+func StartLoops(config common.Config, natsClient *utils.NatsClient) {
 	dbName = config.Postgres.Database
 	dbUser = config.Postgres.User
 	dbHost = config.Postgres.Host
@@ -72,7 +72,7 @@ func StartLoops(config common.Config) {
 		utils.Error.Println("Failed initializing cron updateBadgeView", err)
 		return
 	}
-	_, err = c.AddFunc("0 */12 * * *", backupPostgres)
+	_, err = c.AddFunc("0 */12 * * *", backupPostgres(natsClient))
 	if err != nil {
 		utils.Error.Println("Failed initializing cron backupPostgres", err)
 		return
@@ -338,8 +338,8 @@ func validateTokens() {
 
 		err := rows.Scan(&con.AccessToken, &con.PlatformID, &con.RefreshToken)
 		if err != nil {
-				utils.Error.Println("Error scanning token: ", err)
-				continue
+			utils.Error.Println("Error scanning token: ", err)
+			continue
 		}
 
 		valid, _, err := utils.ValidateHelixToken(con.AccessToken, false)
@@ -443,7 +443,7 @@ func refreshAllHelixTokens() {
 }
 
 func sortFiles(files []string) func(i, j int) bool {
-	return func (i, j int) bool {
+	return func(i, j int) bool {
 		fileI, errI := os.Stat(filepath.Join(dumpPath, files[i]))
 		if errI != nil {
 			return false
@@ -466,7 +466,7 @@ func deleteOldDumps(files []string, max int) {
 
 	sort.Slice(files, sortFiles(files))
 
-	filesToDelete := files[:len(files) - max + 1]
+	filesToDelete := files[:len(files)-max+1]
 	for _, file := range filesToDelete {
 		err := os.Remove(file)
 		if err != nil {
@@ -477,7 +477,13 @@ func deleteOldDumps(files []string, max int) {
 	utils.Info.Printf("Deleted %d old dump files", len(filesToDelete))
 }
 
-func backupPostgres() {
+func backupPostgres(natsClient *utils.NatsClient) func() {
+	return func() {
+		backupPostgresWithPublisher(natsClient)
+	}
+}
+
+func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 	utils.Debug.Println("Backing up Postgres")
 
 	if err := os.MkdirAll(dumpPath, os.ModePerm); err != nil {
@@ -497,7 +503,7 @@ func backupPostgres() {
 
 	filePath := filepath.Join(
 		dumpPath,
-		fmt.Sprintf("data_%d.sql.zst",time.Now().Unix()),
+		fmt.Sprintf("data_%d.sql.zst", time.Now().Unix()),
 	)
 
 	cmd := exec.Command("sh", "-c", fmt.Sprintf(
@@ -546,15 +552,14 @@ func backupPostgres() {
 		backupSize,
 	)
 
-  jsonMessage, err := json.Marshal(message)
+	jsonMessage, err := json.Marshal(message)
 	if err != nil {
 		utils.Error.Println("Failed to JSON stringify message:", err)
 		utils.Info.Println(message)
 		return
 	}
 
-	queueMessage := fmt.Sprintf("postgres-backup:%s", string(jsonMessage))
-	err = utils.PublishToQueue(context.Background(), queueMessage, 1*time.Minute)
+	err = natsClient.Publish("postgres-backup:%s", jsonMessage)
 	if err != nil {
 		utils.Error.Println("Failed to publish to queue:", err)
 		return
@@ -564,7 +569,7 @@ func backupPostgres() {
 }
 
 func getDatabaseSize(dbName string) (string, error) {
-	query := `SELECT pg_size_pretty(pg_database_size($1)) as size`
+	query := `SELECT pg_size_pretty(pg_database_size($1)) AS size`
 	rows, err := Postgres.Pool.Query(context.Background(), query, dbName)
 	if err != nil {
 		return "", err

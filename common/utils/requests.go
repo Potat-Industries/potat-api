@@ -17,7 +17,7 @@ type GqlQuery struct {
 
 type StvResponse struct {
 	Data   map[string]StvUser `json:"data"`
-	Errors []StvError      `json:"errors"`
+	Errors []StvError         `json:"errors"`
 }
 
 type StvUser struct {
@@ -26,8 +26,8 @@ type StvUser struct {
 }
 
 type StvError struct {
-	Message   string      `json:"message"`
-	Locations []Location  `json:"locations"`
+	Message   string     `json:"message"`
+	Locations []Location `json:"locations"`
 }
 
 type Location struct {

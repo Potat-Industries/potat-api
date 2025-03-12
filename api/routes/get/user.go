@@ -1,12 +1,12 @@
 package get
 
 import (
-	"fmt"
-	"time"
-	"sync"
-	"strings"
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
+	"sync"
+	"time"
 
 	"potat-api/api"
 	"potat-api/common"
@@ -17,61 +17,61 @@ import (
 )
 
 type PotatoInfo struct {
-	JoinedAt      string  `json:"joinedAt"`
-	Count         int     `json:"count"`
-	Prestige      int     `json:"prestige"`
-	Rank          int     `json:"rank"`
-	TaxMultiplier int     `json:"taxMultiplier"`
-	Verbose       bool    `json:"verbose"`
-	Potato        Potato  `json:"potato"`
-	Cdr           CDR     `json:"cdr"`
-	Trample       Trample `json:"trample"`
 	Steal         Steal   `json:"steal"`
-	Eat           Eat     `json:"eat"`
+	Trample       Trample `json:"trample"`
+	Potato        Potato  `json:"potato"`
+	JoinedAt      string  `json:"joinedAt"`
+	Duel          Duel    `json:"duel"`
 	Quiz          Quiz    `json:"quiz"`
 	Gamble        Gamble  `json:"gamble"`
-	Duel          Duel    `json:"duel"`
+	Cdr           CDR     `json:"cdr"`
+	Eat           Eat     `json:"eat"`
+	Rank          int     `json:"rank"`
+	TaxMultiplier int     `json:"taxMultiplier"`
+	Prestige      int     `json:"prestige"`
+	Count         int     `json:"count"`
+	Verbose       bool    `json:"verbose"`
 }
 
 type Potato struct {
-	ReadyAt          int `json:"readyAt"`
-	Ready            bool   `json:"ready"`
-	Usage            int    `json:"usage"`
-	AverageResponse  string `json:"averageResponse"`
+	AverageResponse string `json:"averageResponse"`
+	ReadyAt         int    `json:"readyAt"`
+	Usage           int    `json:"usage"`
+	Ready           bool   `json:"ready"`
 }
 
 type CDR struct {
-	ReadyAt int `json:"readyAt"`
-	Ready   bool   `json:"ready"`
+	ReadyAt int  `json:"readyAt"`
+	Ready   bool `json:"ready"`
 }
 
 type Trample struct {
-	ReadyAt       int  `json:"readyAt"`
-	Ready         bool    `json:"ready"`
+	TrampledBy    *string `json:"trampledBy"`
+	ReadyAt       int     `json:"readyAt"`
 	TrampleCount  int     `json:"trampleCount"`
 	TrampledCount int     `json:"trampledCount"`
-	TrampledBy    *string `json:"trampledBy"`
+	Ready         bool    `json:"ready"`
 }
 
 type Steal struct {
-	ReadyAt       int  `json:"readyAt"`
-	Ready         bool    `json:"ready"`
-	StolenCount   int     `json:"stolenCount"`
-	TheftCount    int     `json:"theftCount"`
-	StoleBy       *string `json:"stoleBy"`
-	StolenAmount  *int `json:"stolenAmount"`
+	StoleBy      *string `json:"stoleBy"`
+	StolenAmount *int    `json:"stolenAmount"`
+	ReadyAt      int     `json:"readyAt"`
+	StolenCount  int     `json:"stolenCount"`
+	TheftCount   int     `json:"theftCount"`
+	Ready        bool    `json:"ready"`
 }
 
 type Eat struct {
-	ReadyAt int `json:"readyAt"`
-	Ready   bool    `json:"ready"`
+	ReadyAt int  `json:"readyAt"`
+	Ready   bool `json:"ready"`
 }
 
 type Quiz struct {
-	ReadyAt   int `json:"readyAt"`
-	Ready     bool    `json:"ready"`
-	Attempted int     `json:"attempted"`
-	Completed int     `json:"completed"`
+	ReadyAt   int  `json:"readyAt"`
+	Ready     bool `json:"ready"`
+	Attempted int  `json:"attempted"`
+	Completed int  `json:"completed"`
 }
 
 type Gamble struct {
@@ -92,9 +92,9 @@ type Duel struct {
 type UsersResponse = common.GenericResponse[UserInfo]
 
 type UserInfo struct {
-	User     *common.User       `json:"user"`
-	Channel  *common.Channel    `json:"channel"`
-	Potatoes *PotatoInfo       `json:"potatoes"`
+	User     *common.User    `json:"user"`
+	Channel  *common.Channel `json:"channel"`
+	Potatoes *PotatoInfo     `json:"potatoes"`
 }
 
 func init() {
@@ -130,14 +130,14 @@ func tidyPotatoInfo(
 		TaxMultiplier: data.TaxMultiplier,
 		Verbose:       data.NotVerbose,
 		Potato: Potato{
-			ReadyAt:          lastPotato,
-			Ready:            time.Now().UnixMilli() > int64(lastPotato),
-			Usage:            data.HarvestCount,
-			AverageResponse:  data.AverageResponseTime,
+			ReadyAt:         lastPotato,
+			Ready:           time.Now().UnixMilli() > int64(lastPotato),
+			Usage:           data.HarvestCount,
+			AverageResponse: data.AverageResponseTime,
 		},
 		Cdr: CDR{
 			ReadyAt: lastCDR,
-			Ready:   time.Now().UnixMilli() - int64(lastCDR) > 30 * 60 * 1000,
+			Ready:   time.Now().UnixMilli()-int64(lastCDR) > 30*60*1000,
 		},
 		Trample: Trample{
 			ReadyAt:       lastTrample,
@@ -147,12 +147,12 @@ func tidyPotatoInfo(
 			TrampledBy:    data.TrampledBy,
 		},
 		Steal: Steal{
-			ReadyAt:       lastSteal,
-			Ready:         time.Now().UnixMilli() > int64(lastSteal),
-			StolenCount:   data.StolenCount,
-			TheftCount:    data.TheftCount,
-			StoleBy:       data.StoleFrom,
-			StolenAmount:  data.StoleAmount,
+			ReadyAt:      lastSteal,
+			Ready:        time.Now().UnixMilli() > int64(lastSteal),
+			StolenCount:  data.StolenCount,
+			TheftCount:   data.TheftCount,
+			StoleBy:      data.StoleFrom,
+			StolenAmount: data.StoleAmount,
 		},
 		Eat: Eat{
 			ReadyAt: lastEat,
@@ -297,8 +297,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	)
 
 	return UserInfo{
-		User: userData,
-		Channel: channelData,
+		User:     userData,
+		Channel:  channelData,
 		Potatoes: potatoes,
 	}
 }
@@ -312,7 +312,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		err := "No username provided"
 
 		res := UsersResponse{
-			Data: &[]UserInfo{},
+			Data:   &[]UserInfo{},
 			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
@@ -325,7 +325,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		err := fmt.Sprintf("Too many users provided. Expected 1-25, found %d", len(userArray))
 
 		res := UsersResponse{
-			Data: &[]UserInfo{},
+			Data:   &[]UserInfo{},
 			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
@@ -360,7 +360,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		err := "User not found"
 
 		res := UsersResponse{
-			Data: &dataArray,
+			Data:   &dataArray,
 			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 

@@ -14,7 +14,7 @@ var (
 	Clickhouse driver.Conn
 )
 
-func InitClickhouse(config common.Config) (error) {
+func InitClickhouse(config common.Config) error {
 	host := config.Clickhouse.Host
 	if host == "" {
 		host = "localhost"
@@ -31,8 +31,8 @@ func InitClickhouse(config common.Config) (error) {
 	}
 
 	options := &clickhouse.Options{
-		Addr: []string{fmt.Sprintf("%s:%s", host, port)},
-		Auth: clickhouse.Auth{Username: user,	Password: config.Clickhouse.Password},
+		Addr:   []string{fmt.Sprintf("%s:%s", host, port)},
+		Auth:   clickhouse.Auth{Username: user, Password: config.Clickhouse.Password},
 		Debugf: utils.Debug.Printf,
 	}
 

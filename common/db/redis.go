@@ -13,7 +13,7 @@ type RedisClient struct {
 }
 
 var (
-	Redis *redis.Client
+	Redis       *redis.Client
 	RedisErrNil = redis.Nil
 )
 

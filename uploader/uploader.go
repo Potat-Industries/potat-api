@@ -1,18 +1,18 @@
 package uploader
 
 import (
-	"io"
-	"fmt"
-	"time"
-	"crypto"
 	"context"
-	"net/http"
+	"crypto"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
 
+	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"potat-api/api/middleware"
 
 	"github.com/gorilla/mux"
 )
@@ -37,20 +37,20 @@ var cacheDuration time.Duration
 var keyLength = 6
 
 type Upload struct {
-	Key string 					`json:"key"`
-	URL string					`json:"url"`
-	DeleteHash string 	`json:"delete_hash"`
+	Key        string `json:"key"`
+	URL        string `json:"url"`
+	DeleteHash string `json:"delete_hash"`
 }
 
 func init() {
 	router = mux.NewRouter()
 
 	router.Use(middleware.LogRequest)
-	router.Use(middleware.NewRateLimiter(200, 1 * time.Minute))
+	router.Use(middleware.NewRateLimiter(200, 1*time.Minute))
 	router.HandleFunc("/{key}", handleGet).Methods(http.MethodGet)
 
 	deleteRouter := router.PathPrefix("/delete").Subrouter()
-	deleteRouter.Use(middleware.NewRateLimiter(15, 1 * time.Minute))
+	deleteRouter.Use(middleware.NewRateLimiter(15, 1*time.Minute))
 	deleteRouter.HandleFunc("/{key}/{hash}", handleDelete).Methods(http.MethodGet)
 }
 
@@ -66,7 +66,7 @@ func StartServing(config common.Config) error {
 	authedRoute := router.PathPrefix("/").Subrouter()
 	authedRoute.HandleFunc("/upload", handleUpload).Methods(http.MethodPost)
 	authedRoute.Use(middleware.SetStaticAuthMiddleware(config.Uploader.AuthKey))
-	authedRoute.Use(middleware.NewRateLimiter(25, 1 * time.Minute))
+	authedRoute.Use(middleware.NewRateLimiter(25, 1*time.Minute))
 
 	server = &http.Server{
 		Handler:      router,
@@ -149,8 +149,8 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	err = json.NewEncoder(w).Encode(Upload{
-		Key: key,
-		URL: response,
+		Key:        key,
+		URL:        response,
 		DeleteHash: hasher(key + createdAt.String()),
 	})
 
@@ -172,7 +172,7 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if hash != hasher(key + createdAt.String()) {
+	if hash != hasher(key+createdAt.String()) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

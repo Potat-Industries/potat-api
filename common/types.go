@@ -17,21 +17,21 @@ const (
 type PermissionLevel uint8
 
 const (
-	DEVELOPER 	PermissionLevel = 4
-	ADMIN     	PermissionLevel = 3
-	MOD       	PermissionLevel = 2
-	USER     		PermissionLevel = 1
-	BLACKLISTED	PermissionLevel = 0
+	DEVELOPER   PermissionLevel = 4
+	ADMIN       PermissionLevel = 3
+	MOD         PermissionLevel = 2
+	USER        PermissionLevel = 1
+	BLACKLISTED PermissionLevel = 0
 )
 
 type User struct {
-	FirstSeen   time.Time        	`json:"first_seen"`
-	Username    string           	`json:"username"`
-	Display     string           	`json:"display"`
-	Settings    UserSettings     	`json:"settings"`
-	Connections []UserConnection 	`json:"connections,omitempty"`
-	ID          int              	`json:"user_id"`
-	Level       int              	`json:"level"`
+	FirstSeen   time.Time        `json:"first_seen"`
+	Username    string           `json:"username"`
+	Display     string           `json:"display"`
+	Settings    UserSettings     `json:"settings"`
+	Connections []UserConnection `json:"connections,omitempty"`
+	ID          int              `json:"user_id"`
+	Level       int              `json:"level"`
 }
 
 type UserSettings struct {
@@ -46,13 +46,13 @@ type UserSettings struct {
 type UserMeta = json.RawMessage
 
 type UserConnection struct {
-	Meta     UserMeta		`json:"platform_metadata"`
-	Platform Platforms 	`json:"platform"`
-	Username string    	`json:"platform_username"`
-	Display  string    	`json:"platform_display"`
-	UserID   string    	`json:"platform_id"`
-	PFP      string    	`json:"platform_pfp"`
-	ID       int       	`json:"user_id"`
+	Platform Platforms `json:"platform"`
+	Username string    `json:"platform_username"`
+	Display  string    `json:"platform_display"`
+	UserID   string    `json:"platform_id"`
+	PFP      string    `json:"platform_pfp"`
+	Meta     UserMeta  `json:"platform_metadata"`
+	ID       int       `json:"user_id"`
 }
 
 type KickChannelMeta struct {
@@ -249,41 +249,41 @@ type ErrorMessage struct {
 }
 
 type GenericResponse[T any] struct {
-	Data   *[]T   `json:"data"`
+	Data   *[]T            `json:"data"`
 	Errors *[]ErrorMessage `json:"errors,omitempty"`
 }
 
 type TwitchValidation struct {
 	ClientID   string   `json:"client_id"`
 	Login      string   `json:"login"`
-	Scopes     []string `json:"scopes"`
 	UserID     string   `json:"user_id"`
+	Scopes     []string `json:"scopes"`
 	ExpiresIn  int      `json:"expires_in"`
 	StatusCode int      `json:"status_code"`
 }
 
 type GenericOAUTHResponse struct {
-	AccessToken  string 	`json:"access_token"`
-	RefreshToken string 	`json:"refresh_token"`
+	AccessToken  string   `json:"access_token"`
+	RefreshToken string   `json:"refresh_token"`
+	TokenType    string   `json:"token_type"`
 	Scope        []string `json:"scope"`
-	ExpiresIn    int    	`json:"expires_in"`
-	TokenType    string 	`json:"token_type"`
+	ExpiresIn    int      `json:"expires_in"`
 }
 
 type Command struct {
-	Name              	string             			`json:"name"`
-	Description       	string             			`json:"description"`
-	DetailedDescription string           				`json:"detailedDescription,omitempty"`
-	Title             	string             			`json:"title"`
-	Usage             	string             			`json:"usage"`
-	Category          	CommandCategories       `json:"category"`
-	Aliases           	[]string           			`json:"aliases"`
-	Flags             	[]FlagDetails      			`json:"flags"`
-	Cooldown          	int                			`json:"cooldown"`
-	Level             	PermissionLevel    			`json:"level"`
-	BotRequires       	BotCommandRequirements	`json:"botRequires"`
-	UserRequires      	UserRequires       			`json:"userRequires"`
-	Conditions        	CommandConditions  			`json:"conditions"`
+	Conditions          CommandConditions      `json:"conditions"`
+	BotRequires         BotCommandRequirements `json:"botRequires"`
+	Description         string                 `json:"description"`
+	DetailedDescription string                 `json:"detailedDescription,omitempty"`
+	Title               string                 `json:"title"`
+	Usage               string                 `json:"usage"`
+	Category            CommandCategories      `json:"category"`
+	Name                string                 `json:"name"`
+	UserRequires        UserRequires           `json:"userRequires"`
+	Aliases             []string               `json:"aliases"`
+	Flags               []FlagDetails          `json:"flags"`
+	Cooldown            int                    `json:"cooldown"`
+	Level               PermissionLevel        `json:"level"`
 }
 
 type CommandCategories string
@@ -305,22 +305,22 @@ const (
 )
 
 type FlagDetails struct {
-	Name        string            `json:"name"`
-	Type        string            `json:"type"`
-	Level       PermissionLevel   `json:"level"`
-	UserRequires *UserRequires    `json:"user_requires,omitempty"`
-	Required    bool              `json:"required"`
-	Description string            `json:"description"`
-	Usage       *string           `json:"usage,omitempty"`
-	Aliases     []string          `json:"aliases,omitempty"`
-	Multi       *bool             `json:"multi,omitempty"`
-	Check       func(params Flags, flag FlagDetails) (FlagCheckResult, error) `json:"-"`
+	UserRequires *UserRequires                                                 `json:"user_requires,omitempty"`
+	Usage        *string                                                       `json:"usage,omitempty"`
+	Multi        *bool                                                         `json:"multi,omitempty"`
+	Check        func(params Flags, flag FlagDetails) (FlagCheckResult, error) `json:"-"`
+	Name         string                                                        `json:"name"`
+	Type         string                                                        `json:"type"`
+	Description  string                                                        `json:"description"`
+	Aliases      []string                                                      `json:"aliases,omitempty"`
+	Level        PermissionLevel                                               `json:"level"`
+	Required     bool                                                          `json:"required"`
 }
 
 type FlagCheckResult struct {
 	MustBe *string `json:"must_be,omitempty"`
-	Valid  bool    `json:"valid"`
 	Error  *string `json:"error,omitempty"`
+	Valid  bool    `json:"valid"`
 }
 
 type UserRequires string
@@ -337,12 +337,12 @@ const (
 type Flags map[string]interface{}
 
 type CommandConditions struct {
-	Ryan       		*bool `json:"ryan,omitempty"`
-	OfflineOnly		*bool `json:"offlineOnly,omitempty"`
-	Whisperable		*bool `json:"whisperable,omitempty"`
-	IgnoreBots		*bool `json:"ignoreBots,omitempty"`
-	IsBlockable		*bool `json:"isBlockable,omitempty"`
-	IsNotPipable	*bool `json:"isNotPipable,omitempty"`
+	Ryan         *bool `json:"ryan,omitempty"`
+	OfflineOnly  *bool `json:"offlineOnly,omitempty"`
+	Whisperable  *bool `json:"whisperable,omitempty"`
+	IgnoreBots   *bool `json:"ignoreBots,omitempty"`
+	IsBlockable  *bool `json:"isBlockable,omitempty"`
+	IsNotPipable *bool `json:"isNotPipable,omitempty"`
 }
 
 type BotCommandRequirements string

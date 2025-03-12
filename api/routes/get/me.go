@@ -1,22 +1,22 @@
 package get
 
 import (
-	"time"
 	"context"
-	"net/http"
 	"encoding/json"
+	"net/http"
+	"time"
 
 	"potat-api/api"
+	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"potat-api/api/middleware"
 )
 
 type SiteUserData struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
 	TwitchPFP string `json:"twitch_pfp"`
-	StvPFP string `json:"stv_pfp"`
+	StvPFP    string `json:"stv_pfp"`
 	ChatColor string `json:"chatColor"`
 	UserPaint string `json:"userPaint"`
 	JoinState string `json:"join_state"`
@@ -47,16 +47,16 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 	userData, ok := r.Context().Value(middleware.AuthedUser).(*common.User)
 	if !ok || userData == nil {
 		api.GenericResponse(w, http.StatusUnauthorized, AuthorizedUserResponse{
-			Data:  &[]SiteUserData{},
+			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "Unauthorized"}},
-			}, start)
+		}, start)
 		return
 	}
 
 	// Check userconnections length
 	if len(userData.Connections) == 0 {
 		api.GenericResponse(w, http.StatusUnauthorized, AuthorizedUserResponse{
-			Data: &[]SiteUserData{},
+			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "User connections not found"}},
 		}, start)
 		return
@@ -65,16 +65,19 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 	var stvConnection common.UserConnection
 	var twitchConnection common.UserConnection
 	for _, connection := range userData.Connections {
-    switch connection.Platform {
-    case "STV": stvConnection = connection
-    case "TWITCH": twitchConnection = connection
-    default: continue
-    }
+		switch connection.Platform {
+		case "STV":
+			stvConnection = connection
+		case "TWITCH":
+			twitchConnection = connection
+		default:
+			continue
+		}
 	}
 
 	if twitchConnection.UserID == "" {
 		api.GenericResponse(w, http.StatusUnauthorized, AuthorizedUserResponse{
-			Data: &[]SiteUserData{},
+			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "User Twitch connection not found"}},
 		}, start)
 		return
@@ -93,9 +96,9 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := SiteUserData{
-		Name: userData.Display,
+		Name:      userData.Display,
 		TwitchPFP: twitchConnection.PFP,
-		StvPFP: stvConnection.PFP,
+		StvPFP:    stvConnection.PFP,
 		ChatColor: twitchMeta.Color,
 		UserPaint: stvMeta.PaintID,
 		JoinState: getChannelState(r.Context(), twitchConnection.UserID, common.TWITCH),

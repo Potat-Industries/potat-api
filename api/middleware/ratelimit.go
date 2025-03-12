@@ -92,7 +92,7 @@ func getIpToken(
 
 	remaining := limit - results[0].(int64)
 	allowed := results[1].(int64) == 1
-	remainingTTL := results[2].(int64)  
+	remainingTTL := results[2].(int64)
 
 	return allowed, remaining, remainingTTL, nil
 }
