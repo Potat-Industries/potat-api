@@ -1,11 +1,11 @@
 package post
 
 import (
-	"fmt"
 	"context"
-	"strings"
-	"net/http"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
 
 	"potat-api/api"
 	"potat-api/common"
@@ -26,6 +26,7 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		utils.Error.Printf("Invalid request body: %v", err)
 		http.Error(w, "Bad Request", http.StatusBadRequest)
+
 		return
 	}
 
@@ -40,6 +41,7 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			utils.Error.Printf("Failed to write response: %v", err)
 		}
+
 		return
 	}
 
@@ -47,12 +49,14 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error generating key: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 
 	if err := db.Postgres.NewRedirect(r.Context(), key, input.URL); err != nil {
 		utils.Error.Printf("Error inserting redirect: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 

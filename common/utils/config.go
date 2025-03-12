@@ -36,6 +36,7 @@ func loadOrCopy() ([]byte, error) {
 		if os.IsNotExist(err) {
 			return copyExampleConfig()
 		}
+
 		return nil, err
 	}
 
@@ -50,7 +51,7 @@ func copyExampleConfig() ([]byte, error) {
 		return nil, err
 	}
 
-	err = os.WriteFile("config.json", data, 0644)
+	err = os.WriteFile("config.json", data, 0o644)
 	if err != nil {
 		return nil, err
 	}

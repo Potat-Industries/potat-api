@@ -1,17 +1,17 @@
 package redirects
 
 import (
-	"time"
-	"strings"
 	"context"
+	"errors"
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/gorilla/mux"
+	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"potat-api/api/middleware"
-
-	"github.com/gorilla/mux"
 )
 
 const createTable = `
@@ -21,13 +21,15 @@ const createTable = `
 	);
 `
 
-var server *http.Server
-var router *mux.Router
+var (
+	server *http.Server
+	router *mux.Router
+)
 
 func init() {
 	router = mux.NewRouter()
 
-	limiter := middleware.NewRateLimiter(100, 1 * time.Minute)
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
 	router.Use(middleware.LogRequest)
 	router.Use(limiter)
 	router.HandleFunc("/{id}", getRedirect).Methods(http.MethodGet)
@@ -68,7 +70,7 @@ func setRedis(key, data string) {
 
 func getRedis(ctx context.Context, key string) (string, error) {
 	data, err := db.Redis.Get(ctx, key).Result()
-	if err != nil && err != db.RedisErrNil {
+	if err != nil && !errors.Is(err, db.RedisErrNil) {
 		return "", err
 	}
 
@@ -80,6 +82,7 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 	key := vars["id"]
 	if key == "" {
 		http.NotFound(w, r)
+
 		return
 	}
 
@@ -87,6 +90,7 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 	if err == nil && cache != "" {
 		w.Header().Set("X-Cache-Hit", "HIT")
 		http.Redirect(w, r, cache, http.StatusSeeOther)
+
 		return
 	} else {
 		w.Header().Set("X-Cache-Hit", "MISS")
@@ -94,13 +98,15 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 
 	redirect, err := db.Postgres.GetRedirectByKey(r.Context(), key)
 	if err != nil {
-		if err == db.PostgresNoRows {
+		if errors.Is(err, db.PostgresNoRows) {
 			http.NotFound(w, r)
+
 			return
 		}
 
 		utils.Error.Printf("Error fetching redirect: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 

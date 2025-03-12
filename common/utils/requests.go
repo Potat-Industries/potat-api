@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"potat-api/common"
 	"strings"
 	"time"
+
+	"potat-api/common"
 )
 
 type GqlQuery struct {
@@ -17,7 +18,7 @@ type GqlQuery struct {
 
 type StvResponse struct {
 	Data   map[string]StvUser `json:"data"`
-	Errors []StvError      `json:"errors"`
+	Errors []StvError         `json:"errors"`
 }
 
 type StvUser struct {
@@ -26,8 +27,8 @@ type StvUser struct {
 }
 
 type StvError struct {
-	Message   string      `json:"message"`
-	Locations []Location  `json:"locations"`
+	Message   string     `json:"message"`
+	Locations []Location `json:"locations"`
 }
 
 type Location struct {
@@ -95,7 +96,6 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 		headers,
 		&body,
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,6 @@ func ValidateHelixToken(
 		map[string]string{"Authorization": "OAuth " + token},
 		nil,
 	)
-
 	if err != nil {
 		return false, &common.TwitchValidation{}, err
 	}

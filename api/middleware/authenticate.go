@@ -5,13 +5,13 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"net/http"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/utils"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"potat-api/common"
+	"potat-api/common/db"
+	"potat-api/common/utils"
 )
 
 type UnauthorizedResponse = common.GenericResponse[string]
@@ -19,13 +19,13 @@ type UnauthorizedResponse = common.GenericResponse[string]
 type AuthenticatedUser string
 
 type PotatClaims struct {
-	UserID int `json:"user_id"`
 	jwt.RegisteredClaims
+	UserID int `json:"user_id"`
 }
 
 var (
-	JWTSecret []byte
-	unauthorizedFunc func (
+	JWTSecret        []byte
+	unauthorizedFunc func(
 		w http.ResponseWriter,
 		status int,
 		response interface{},
@@ -39,12 +39,13 @@ func SetJWTSecret(s string) {
 	JWTSecret = []byte(s)
 }
 
-func SetUnauthorizedFunc(f func (
+func SetUnauthorizedFunc(f func(
 	w http.ResponseWriter,
 	status int,
 	response interface{},
 	start time.Time,
-)) {
+),
+) {
 	unauthorizedFunc = f
 }
 
@@ -57,11 +58,12 @@ func sendUnauthorized(w http.ResponseWriter) {
 }
 
 func SetStaticAuthMiddleware(secret string) func(http.Handler) http.Handler {
-	return func (next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := strings.Replace(r.Header.Get("Authorization"), "Bearer ", "", 1)
 			if !verifySimpleAuthKey(auth, secret) {
 				sendUnauthorized(w)
+
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -74,17 +76,19 @@ func verifySimpleAuthKey(provided, possessed string) bool {
 }
 
 func SetDynamicAuthMiddleware() func(http.Handler) http.Handler {
-	return func (next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := r.Header.Get("Authorization")
 			if token == "" {
 				sendUnauthorized(w)
+
 				return
 			}
 
 			ok, user := verifyDynamicAuth(token, r.Context())
 			if !ok {
 				sendUnauthorized(w)
+
 				return
 			}
 
@@ -101,10 +105,10 @@ func verifyDynamicAuth(token string, ctx context.Context) (bool, *common.User) {
 		return false, &common.User{}
 	}
 
-
 	user, err := db.Postgres.GetUserByInternalID(ctx, claims.UserID)
 	if err != nil {
 		utils.Warn.Println("Error fetching authenticated user: ", err)
+
 		return false, &common.User{}
 	}
 
@@ -115,6 +119,7 @@ func jwtKeyFunc(token *jwt.Token) (interface{}, error) {
 	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 	}
+
 	return JWTSecret, nil
 }
 
@@ -148,5 +153,3 @@ func CreateJWT(userID int) (string, error) {
 
 	return signedToken, nil
 }
-
-

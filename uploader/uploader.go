@@ -1,20 +1,20 @@
 package uploader
 
 import (
-	"io"
-	"fmt"
-	"time"
-	"crypto"
 	"context"
-	"net/http"
+	"crypto"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
 
+	"github.com/gorilla/mux"
+	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"potat-api/api/middleware"
-
-	"github.com/gorilla/mux"
 )
 
 const maxFileSize = 20971520 // 20MB
@@ -30,27 +30,29 @@ const createTable = `
 	);
 `
 
-var server *http.Server
-var router *mux.Router
-var hasher func(string) string
-var cacheDuration time.Duration
-var keyLength = 6
+var (
+	server        *http.Server
+	router        *mux.Router
+	hasher        func(string) string
+	cacheDuration time.Duration
+	keyLength     = 6
+)
 
 type Upload struct {
-	Key string 					`json:"key"`
-	URL string					`json:"url"`
-	DeleteHash string 	`json:"delete_hash"`
+	Key        string `json:"key"`
+	URL        string `json:"url"`
+	DeleteHash string `json:"delete_hash"`
 }
 
 func init() {
 	router = mux.NewRouter()
 
 	router.Use(middleware.LogRequest)
-	router.Use(middleware.NewRateLimiter(200, 1 * time.Minute))
+	router.Use(middleware.NewRateLimiter(200, 1*time.Minute))
 	router.HandleFunc("/{key}", handleGet).Methods(http.MethodGet)
 
 	deleteRouter := router.PathPrefix("/delete").Subrouter()
-	deleteRouter.Use(middleware.NewRateLimiter(15, 1 * time.Minute))
+	deleteRouter.Use(middleware.NewRateLimiter(15, 1*time.Minute))
 	deleteRouter.HandleFunc("/{key}/{hash}", handleDelete).Methods(http.MethodGet)
 }
 
@@ -66,7 +68,7 @@ func StartServing(config common.Config) error {
 	authedRoute := router.PathPrefix("/").Subrouter()
 	authedRoute.HandleFunc("/upload", handleUpload).Methods(http.MethodPost)
 	authedRoute.Use(middleware.SetStaticAuthMiddleware(config.Uploader.AuthKey))
-	authedRoute.Use(middleware.NewRateLimiter(25, 1 * time.Minute))
+	authedRoute.Use(middleware.NewRateLimiter(25, 1*time.Minute))
 
 	server = &http.Server{
 		Handler:      router,
@@ -101,6 +103,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error parsing form: %v", err)
 		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+
 		return
 	}
 
@@ -108,6 +111,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error retrieving file: %v", err)
 		http.Error(w, "File is required", http.StatusBadRequest)
+
 		return
 	}
 	defer file.Close()
@@ -117,6 +121,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error reading file: %v", err)
 		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -126,6 +131,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error generating key: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -139,6 +145,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		utils.Error.Printf("Error inserting upload: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -149,11 +156,10 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	err = json.NewEncoder(w).Encode(Upload{
-		Key: key,
-		URL: response,
+		Key:        key,
+		URL:        response,
 		DeleteHash: hasher(key + createdAt.String()),
 	})
-
 	if err != nil {
 		utils.Error.Printf("Error encoding response: %v", err)
 	}
@@ -169,17 +175,20 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 	createdAt, err := db.Postgres.GetUploadCreatedAt(r.Context(), key)
 	if err != nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
+
 		return
 	}
 
-	if hash != hasher(key + createdAt.String()) {
+	if hash != hasher(key+createdAt.String()) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 		return
 	}
 
 	ok := db.Postgres.DeleteFileByKey(r.Context(), key)
 	if !ok {
 		http.Error(w, "Not Found", http.StatusNotFound)
+
 		return
 	}
 
@@ -200,18 +209,21 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			utils.Warn.Printf("Failed to write document: %v", err)
 		}
+
 		return
 	}
 
 	data, mimeType, name, _, err := db.Postgres.GetFileByKey(r.Context(), key)
-	if err == db.PostgresNoRows {
+	if errors.Is(err, db.PostgresNoRows) {
 		http.Error(w, "Not Found", http.StatusNotFound)
+
 		return
 	}
 
 	if err != nil {
 		utils.Warn.Printf("Failed to get document: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 

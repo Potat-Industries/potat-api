@@ -26,6 +26,7 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 					http.StatusText(http.StatusInternalServerError),
 					http.StatusInternalServerError,
 				)
+
 				return
 			}
 
@@ -42,6 +43,7 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 					http.StatusText(http.StatusTooManyRequests),
 					http.StatusTooManyRequests,
 				)
+
 				return
 			}
 
@@ -79,9 +81,9 @@ func getIpToken(
 		int(window.Seconds()),
 		limit,
 	).Result()
-
 	if err != nil {
 		utils.Error.Println("Error evaluating Lua script", err)
+
 		return false, 0, 0, err
 	}
 
@@ -92,7 +94,7 @@ func getIpToken(
 
 	remaining := limit - results[0].(int64)
 	allowed := results[1].(int64) == 1
-	remainingTTL := results[2].(int64)  
+	remainingTTL := results[2].(int64)
 
 	return allowed, remaining, remainingTTL, nil
 }

@@ -6,28 +6,30 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/utils"
-
-	"github.com/gorilla/mux"
 )
+
 type Route struct {
-	Path string
-	Method string
 	Handler http.HandlerFunc
+	Path    string
+	Method  string
 }
 
-var server *http.Server
-var router *mux.Router
-var authedRouter *mux.Router
+var (
+	server       *http.Server
+	router       *mux.Router
+	authedRouter *mux.Router
+)
 
 func init() {
 	middleware.SetUnauthorizedFunc(GenericResponse)
 
 	router = mux.NewRouter()
 
-	limiter := middleware.NewRateLimiter(100, 1 * time.Minute)
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
 	router.Use(middleware.LogRequest)
 	router.Use(limiter)
 
@@ -47,8 +49,8 @@ func StartServing(config common.Config) error {
 	middleware.SetJWTSecret(config.Twitch.ClientSecret)
 
 	server = &http.Server{
-		Handler: router,
-		Addr:    config.API.Host + ":" + config.API.Port,
+		Handler:      router,
+		Addr:         config.API.Host + ":" + config.API.Port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -62,6 +64,7 @@ func StartServing(config common.Config) error {
 func SetRoute(route Route, auth bool) {
 	if auth {
 		authedRouter.HandleFunc(route.Path, route.Handler).Methods(route.Method)
+
 		return
 	}
 	router.HandleFunc(route.Path, route.Handler).Methods(route.Method)

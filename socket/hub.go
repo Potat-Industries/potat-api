@@ -3,15 +3,15 @@ package socket
 import (
 	"errors"
 	"net/http"
-	
+
 	"potat-api/common"
 	"potat-api/common/utils"
 )
 
 type Hub struct {
-	clients map[*Client]bool
-	broadcast chan []byte
-	register chan *Client
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
 	unregister chan *Client
 }
 
@@ -49,7 +49,7 @@ func (h *Hub) run() {
 	}
 }
 
-func Send(message string) error {
+func Send(message []byte) error {
 	if hub == nil {
 		return errors.New("hub is not initialized!")
 	}
@@ -58,12 +58,12 @@ func Send(message string) error {
 		return nil
 	}
 
-	hub.broadcast <- []byte(message)
+	hub.broadcast <- message
 
 	return nil
 }
 
-func StartServing(config common.Config) error {
+func StartServing(config common.Config, natsClient *utils.NatsClient) error {
 	hub = newHub()
 	go hub.run()
 
@@ -74,8 +74,7 @@ func StartServing(config common.Config) error {
 	addr := config.Socket.Host + ":" + config.Socket.Port
 	utils.Info.Printf("Socket server listening on %s", addr)
 
-	utils.SetProxySocketFn(Send)
+	natsClient.SetProxySocketFn(Send)
 
 	return http.ListenAndServe(addr, nil)
 }
-
