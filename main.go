@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"potat-api/api"
+	_ "potat-api/api/routes/get"
+	_ "potat-api/api/routes/post"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
@@ -16,9 +18,6 @@ import (
 	"potat-api/redirects"
 	"potat-api/socket"
 	"potat-api/uploader"
-
-	_ "potat-api/api/routes/get"
-	_ "potat-api/api/routes/post"
 )
 
 func main() {

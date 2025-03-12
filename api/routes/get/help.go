@@ -3,12 +3,14 @@ package get
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
+
 	"potat-api/api"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-	"time"
 )
 
 type HelpResponse = common.GenericResponse[common.Command]
@@ -30,7 +32,7 @@ func setCache(key string, data interface{}) {
 
 func getCache(ctx context.Context, key string) (*[]common.Command, error) {
 	data, err := db.Redis.Get(ctx, key).Bytes()
-	if (err != nil && err != db.RedisErrNil) || data == nil {
+	if (err != nil && !errors.Is(err, db.RedisErrNil)) || data == nil {
 		return &[]common.Command{}, err
 	}
 

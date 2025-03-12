@@ -2,28 +2,28 @@ package get
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-
-	"github.com/gorilla/mux"
 )
 
 type PotatoInfo struct {
+	JoinedAt      string  `json:"joinedAt"`
 	Steal         Steal   `json:"steal"`
 	Trample       Trample `json:"trample"`
 	Potato        Potato  `json:"potato"`
-	JoinedAt      string  `json:"joinedAt"`
 	Duel          Duel    `json:"duel"`
-	Quiz          Quiz    `json:"quiz"`
 	Gamble        Gamble  `json:"gamble"`
+	Quiz          Quiz    `json:"quiz"`
 	Cdr           CDR     `json:"cdr"`
 	Eat           Eat     `json:"eat"`
 	Rank          int     `json:"rank"`
@@ -197,7 +197,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Postgres.GetUserByName(ctx, user)
-		if err != nil && err != db.PostgresNoRows {
+		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			utils.Warn.Println("Error fetching user data: ", err)
 		} else {
 			userData = data
@@ -207,7 +207,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Postgres.GetChannelByName(ctx, user, common.Platforms(common.TWITCH))
-		if err != nil && err != db.PostgresNoRows {
+		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			utils.Warn.Println("Error fetching channel data: ", err)
 		} else {
 			channelData = data
@@ -217,7 +217,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Postgres.GetPotatoData(ctx, user)
-		if err != nil && err != db.PostgresNoRows {
+		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			utils.Warn.Println("Error fetching potato data: ", err)
 		} else {
 			potatData = data
@@ -227,7 +227,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("potato:%s", user)).Int()
-		if err != nil && err != db.RedisErrNil {
+		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last potato: ", err)
 		} else {
 			lastPotato = data
@@ -237,7 +237,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("cdr:%s", user)).Int()
-		if err != nil && err != db.RedisErrNil {
+		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last cdr: ", err)
 		} else {
 			lastCDR = data
@@ -247,7 +247,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("trample:%s", user)).Int()
-		if err != nil && err != db.RedisErrNil {
+		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last trample: ", err)
 		} else {
 			lastTrample = data
@@ -257,7 +257,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("steal:%s", user)).Int()
-		if err != nil && err != db.RedisErrNil {
+		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last steal: ", err)
 		} else {
 			lastSteal = data
@@ -267,7 +267,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("eat:%s", user)).Int()
-		if err != nil && err != db.RedisErrNil {
+		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last eat: ", err)
 		} else {
 			lastEat = data
@@ -277,7 +277,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 		data, err := db.Redis.Get(ctx, fmt.Sprintf("quiz:%s", user)).Int()
-		if err != nil && err != db.RedisErrNil {
+		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last quiz: ", err)
 		} else {
 			lastQuiz = data
@@ -317,6 +317,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		api.GenericResponse(w, http.StatusBadRequest, res, start)
+
 		return
 	}
 
@@ -330,6 +331,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		api.GenericResponse(w, http.StatusBadRequest, res, start)
+
 		return
 	}
 
@@ -365,6 +367,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		api.GenericResponse(w, http.StatusNotFound, res, start)
+
 		return
 	}
 

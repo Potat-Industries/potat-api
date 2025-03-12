@@ -13,10 +13,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	"potat-api/common"
 	"potat-api/common/utils"
-
-	"github.com/robfig/cron/v3"
 )
 
 var (
@@ -40,46 +39,55 @@ func StartLoops(config common.Config, natsClient *utils.NatsClient) {
 	_, err = c.AddFunc("@hourly", updateHourlyUsage)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateHourlyUsage", err)
+
 		return
 	}
 	_, err = c.AddFunc("@daily", updateDailyUsage)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateDailyUsage", err)
+
 		return
 	}
 	_, err = c.AddFunc("@weekly", updateWeeklyUsage)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateWeeklyUsage", err)
+
 		return
 	}
 	_, err = c.AddFunc("@hourly", validateTokens)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron validateTokens", err)
+
 		return
 	}
 	_, err = c.AddFunc("0 */2 * * *", refreshAllHelixTokens)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron refreshAllHelixTokens", err)
+
 		return
 	}
 	_, err = c.AddFunc("*/5 * * * *", updateColorView)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateColorView", err)
+
 		return
 	}
 	_, err = c.AddFunc("*/5 * * * *", updateBadgeView)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateBadgeView", err)
+
 		return
 	}
 	_, err = c.AddFunc("0 */12 * * *", backupPostgres(natsClient))
 	if err != nil {
 		utils.Error.Println("Failed initializing cron backupPostgres", err)
+
 		return
 	}
 	_, err = c.AddFunc("0 */12 * * *", optimizeClickhouse)
 	if err != nil {
 		utils.Error.Println("Failed initializing cron optimizeClickhouse", err)
+
 		return
 	}
 
@@ -98,6 +106,7 @@ func decrementDuels() {
 		keys, err := Scan(context.Background(), "duelUse:*", 100, 0)
 		if err != nil {
 			utils.Error.Println("Failed scanning keys for duels", err)
+
 			return
 		}
 
@@ -307,6 +316,7 @@ func refreshOrDelete(con common.PlatformOauth) (bool, error) {
 		utils.Error.Println(
 			"Error updating token for user_id", con.PlatformID, ":", err,
 		)
+
 		return false, err
 	}
 
@@ -328,6 +338,7 @@ func validateTokens() {
 	rows, err := Postgres.Pool.Query(context.Background(), query)
 	if err != nil {
 		utils.Error.Println("Error getting tokens ", err)
+
 		return
 	}
 	defer rows.Close()
@@ -339,12 +350,14 @@ func validateTokens() {
 		err := rows.Scan(&con.AccessToken, &con.PlatformID, &con.RefreshToken)
 		if err != nil {
 			utils.Error.Println("Error scanning token: ", err)
+
 			continue
 		}
 
 		valid, _, err := utils.ValidateHelixToken(con.AccessToken, false)
 		if err != nil {
 			utils.Error.Println("Error validating token ", err)
+
 			continue
 		}
 
@@ -353,6 +366,7 @@ func validateTokens() {
 			if err != nil {
 				utils.Error.Println("Error refreshing token ", err)
 				deleted++
+
 				continue
 			}
 
@@ -396,6 +410,7 @@ func refreshAllHelixTokens() {
 	rows, err := Postgres.Pool.Query(context.Background(), query)
 	if err != nil {
 		utils.Error.Println("Error getting tokens ", err)
+
 		return
 	}
 	defer rows.Close()
@@ -415,6 +430,7 @@ func refreshAllHelixTokens() {
 		)
 		if err != nil {
 			utils.Error.Println("Error scanning token: ", err)
+
 			continue
 		}
 
@@ -422,6 +438,7 @@ func refreshAllHelixTokens() {
 		if err != nil {
 			utils.Error.Println("Error refreshing token ", err)
 			failed++
+
 			continue
 		}
 
@@ -432,6 +449,7 @@ func refreshAllHelixTokens() {
 		}
 
 		time.Sleep(200 * time.Millisecond)
+
 		continue
 	}
 
@@ -488,12 +506,14 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 
 	if err := os.MkdirAll(dumpPath, os.ModePerm); err != nil {
 		utils.Error.Println("Failed to create backup folder:", err)
+
 		return
 	}
 
 	files, err := filepath.Glob(filepath.Join(dumpPath, "*.sql.zst"))
 	if err != nil {
 		utils.Error.Println("Failed to list dump files:", err)
+
 		return
 	}
 
@@ -527,6 +547,7 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
 		utils.Error.Println("Failed to execute pg_dump:", err, stderr.String())
+
 		return
 	}
 	duration := time.Since(start)
@@ -534,6 +555,7 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 	stat, err := os.Stat(filePath)
 	if err != nil {
 		utils.Error.Println("Failed to get backup file size:", err)
+
 		return
 	}
 
@@ -542,6 +564,7 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 	dbSize, err := getDatabaseSize(dbName)
 	if err != nil {
 		utils.Error.Println("Failed to get database size:", err)
+
 		return
 	}
 
@@ -556,12 +579,14 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 	if err != nil {
 		utils.Error.Println("Failed to JSON stringify message:", err)
 		utils.Info.Println(message)
+
 		return
 	}
 
 	err = natsClient.Publish("postgres-backup:%s", jsonMessage)
 	if err != nil {
 		utils.Error.Println("Failed to publish to queue:", err)
+
 		return
 	}
 
@@ -582,6 +607,7 @@ func getDatabaseSize(dbName string) (string, error) {
 		if err := rows.Scan(&size); err != nil {
 			return "", err
 		}
+
 		return size, nil
 	}
 
@@ -597,6 +623,7 @@ func optimizeClickhouse() {
 	config := utils.LoadConfig()
 	if config.Clickhouse.Database == "" {
 		utils.Error.Println("Clickhouse database is not configured")
+
 		return
 	}
 
@@ -605,6 +632,7 @@ func optimizeClickhouse() {
 	rows, err := Clickhouse.Query(context.Background(), query, config.Clickhouse.Database)
 	if err != nil {
 		utils.Error.Println("Failed to query Clickhouse tables:", err)
+
 		return
 	}
 
@@ -612,6 +640,7 @@ func optimizeClickhouse() {
 		var table string
 		if err := rows.Scan(&table); err != nil {
 			utils.Error.Println("Failed to scan Clickhouse table:", err)
+
 			continue
 		}
 

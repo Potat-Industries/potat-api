@@ -13,20 +13,17 @@ import (
 
 	"potat-api/api"
 	"potat-api/common"
-	//"potat-api/common/db"
 	"potat-api/common/utils"
 )
 
 const (
 	twitchOauthURI   = "https://id.twitch.tv/oauth2/authorize"
 	twitchOauthToken = "https://id.twitch.tv/oauth2/token"
-	// TODO: load from config
+	// TODO: load from config.
 	scopes = "channel:bot chat:read user:read:moderated_channels channel:manage:broadcast channel:manage:redemptions channel:read:subscriptions moderator:read:followers channel:read:hype_train channel:read:guest_star"
 )
 
-var (
-	replyDeny sync.Map
-)
+var replyDeny sync.Map
 
 func init() {
 	api.SetRoute(api.Route{
@@ -76,12 +73,14 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 		}.Encode()
 		uri := fmt.Sprintf("%s?%s", twitchOauthURI, params)
 		http.Redirect(w, r, uri, http.StatusFound)
+
 		return
 	}
 
 	// Disallow replay attacks
 	if _, ok := replyDeny.Load(state); !ok {
 		http.Error(w, "Forbidden", http.StatusForbidden)
+
 		return
 	}
 	replyDeny.Delete(state)
@@ -99,6 +98,7 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		http.Error(w, "Failed to get access token", http.StatusInternalServerError)
+
 		return
 	}
 	defer tokenResp.Body.Close()
@@ -106,6 +106,7 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 	var tokenData common.GenericOAUTHResponse
 	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenData); err != nil {
 		http.Error(w, "Failed to parse token response", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -118,6 +119,7 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "Failed to validate access token"}},
 		}, start)
+
 		return
 	}
 

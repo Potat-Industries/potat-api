@@ -6,11 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/utils"
-
-	"github.com/gorilla/mux"
 )
 
 type Route struct {
@@ -19,9 +18,11 @@ type Route struct {
 	Method  string
 }
 
-var server *http.Server
-var router *mux.Router
-var authedRouter *mux.Router
+var (
+	server       *http.Server
+	router       *mux.Router
+	authedRouter *mux.Router
+)
 
 func init() {
 	middleware.SetUnauthorizedFunc(GenericResponse)
@@ -63,6 +64,7 @@ func StartServing(config common.Config) error {
 func SetRoute(route Route, auth bool) {
 	if auth {
 		authedRouter.HandleFunc(route.Path, route.Handler).Methods(route.Method)
+
 		return
 	}
 	router.HandleFunc(route.Path, route.Handler).Methods(route.Method)

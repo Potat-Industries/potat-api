@@ -15,6 +15,7 @@ func RandomString(length int) (string, error) {
 		return "", err
 	}
 	hexKey := hex.EncodeToString(bytes)
+
 	return hexKey, nil
 }
 

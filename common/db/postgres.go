@@ -8,11 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"potat-api/common"
-	"potat-api/common/utils"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"potat-api/common"
+	"potat-api/common/utils"
 )
 
 type DB struct {
@@ -572,7 +571,7 @@ func (db *DB) BatchUserConections(
 
 	defer rows.Close()
 
-	var users = make(map[int][]common.UserConnection)
+	users := make(map[int][]common.UserConnection)
 	for rows.Next() {
 		var connection common.UserConnection
 		err := rows.Scan(
@@ -635,6 +634,7 @@ func (db *DB) NewRedirect(ctx context.Context, key, url string) error {
 	query := `INSERT INTO url_redirects (key, url) VALUES ($1, $2)`
 
 	_, err := Postgres.Pool.Exec(ctx, query, key, url)
+
 	return err
 }
 
@@ -669,12 +669,14 @@ func (db *DB) NewHaste(
 	`
 
 	_, err := Postgres.Pool.Exec(ctx, query, encode(key), text, source)
+
 	return err
 }
 
 func encode(data string) string {
 	hash := md5.New()
 	hash.Write([]byte(data))
+
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
@@ -694,6 +696,7 @@ func (db *DB) NewUpload(
 	err := Postgres.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
 	if err != nil {
 		utils.Error.Println("Error scanning upload", err)
+
 		return false, nil
 	}
 
@@ -738,6 +741,7 @@ func (db *DB) DeleteFileByKey(
 	`
 
 	_, err := Postgres.Pool.Exec(ctx, query, key)
+
 	return err == nil
 }
 

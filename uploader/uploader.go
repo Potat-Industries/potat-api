@@ -4,17 +4,17 @@ import (
 	"context"
 	"crypto"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-
-	"github.com/gorilla/mux"
 )
 
 const maxFileSize = 20971520 // 20MB
@@ -30,11 +30,13 @@ const createTable = `
 	);
 `
 
-var server *http.Server
-var router *mux.Router
-var hasher func(string) string
-var cacheDuration time.Duration
-var keyLength = 6
+var (
+	server        *http.Server
+	router        *mux.Router
+	hasher        func(string) string
+	cacheDuration time.Duration
+	keyLength     = 6
+)
 
 type Upload struct {
 	Key        string `json:"key"`
@@ -101,6 +103,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error parsing form: %v", err)
 		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+
 		return
 	}
 
@@ -108,6 +111,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error retrieving file: %v", err)
 		http.Error(w, "File is required", http.StatusBadRequest)
+
 		return
 	}
 	defer file.Close()
@@ -117,6 +121,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error reading file: %v", err)
 		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -126,6 +131,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error.Printf("Error generating key: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -139,6 +145,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		utils.Error.Printf("Error inserting upload: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -153,7 +160,6 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		URL:        response,
 		DeleteHash: hasher(key + createdAt.String()),
 	})
-
 	if err != nil {
 		utils.Error.Printf("Error encoding response: %v", err)
 	}
@@ -169,17 +175,20 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 	createdAt, err := db.Postgres.GetUploadCreatedAt(r.Context(), key)
 	if err != nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
+
 		return
 	}
 
 	if hash != hasher(key+createdAt.String()) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 		return
 	}
 
 	ok := db.Postgres.DeleteFileByKey(r.Context(), key)
 	if !ok {
 		http.Error(w, "Not Found", http.StatusNotFound)
+
 		return
 	}
 
@@ -200,18 +209,21 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			utils.Warn.Printf("Failed to write document: %v", err)
 		}
+
 		return
 	}
 
 	data, mimeType, name, _, err := db.Postgres.GetFileByKey(r.Context(), key)
-	if err == db.PostgresNoRows {
+	if errors.Is(err, db.PostgresNoRows) {
 		http.Error(w, "Not Found", http.StatusNotFound)
+
 		return
 	}
 
 	if err != nil {
 		utils.Warn.Printf("Failed to get document: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
 		return
 	}
 

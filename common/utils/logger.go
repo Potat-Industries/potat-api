@@ -89,6 +89,7 @@ func (l *Logger) levelString() string {
 	case ERROR:
 		return "ERROR"
 	}
+
 	return ""
 }
 

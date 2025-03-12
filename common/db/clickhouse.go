@@ -3,16 +3,13 @@ package db
 import (
 	"fmt"
 
-	"potat-api/common"
-	"potat-api/common/utils"
-
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"potat-api/common"
+	"potat-api/common/utils"
 )
 
-var (
-	Clickhouse driver.Conn
-)
+var Clickhouse driver.Conn
 
 func InitClickhouse(config common.Config) error {
 	host := config.Clickhouse.Host

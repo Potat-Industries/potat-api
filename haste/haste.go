@@ -3,6 +3,7 @@ package haste
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -12,12 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
-
-	"github.com/gorilla/mux"
 )
 
 const createTable = `
@@ -109,6 +109,7 @@ func setRedis(key, data string) {
 	err := db.Redis.Set(context.Background(), key, data, 0).Err()
 	if err != nil {
 		utils.Warn.Printf("Failed to cache document: %v", err)
+
 		return
 	}
 
@@ -139,9 +140,9 @@ func loadStaticFiles(staticPath string) map[string]bool {
 			relativePath := strings.TrimPrefix(path, staticPath)
 			files[relativePath] = true
 		}
+
 		return nil
 	})
-
 	if err != nil {
 		utils.Error.Fatalf("Failed to load static files: %v", err)
 	}
@@ -153,6 +154,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["id"]
 	if key == "" {
 		http.Error(w, "Key not provided", http.StatusBadRequest)
+
 		return
 	}
 
@@ -165,6 +167,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			utils.Warn.Println("Failed to write document: ", err)
 		}
+
 		return
 	}
 
@@ -172,6 +175,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	if err != nil || data == "" {
 		utils.Warn.Printf("Failed to get document: %v", err)
 		http.Error(w, "Document not found", http.StatusNotFound)
+
 		return
 	}
 
@@ -190,6 +194,7 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["id"]
 	if key == "" {
 		http.Error(w, "Key not provided", http.StatusBadRequest)
+
 		return
 	}
 
@@ -206,6 +211,7 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			utils.Warn.Println("Failed to write document: ", err)
 		}
+
 		return
 	}
 
@@ -213,6 +219,7 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 	if err != nil || data == "" {
 		utils.Warn.Printf("Failed to get document: %v", err)
 		http.Error(w, "Document not found", http.StatusNotFound)
+
 		return
 	}
 
@@ -231,6 +238,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, "Error parsing form", http.StatusBadRequest)
+
 		return
 	}
 
@@ -238,6 +246,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Warn.Println("Error reading request body: ", err)
 		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+
 		return
 	}
 	defer r.Body.Close()
@@ -246,18 +255,21 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Warn.Println("Error parsing media type: ", err)
 		http.Error(w, "Invalid content type", http.StatusUnsupportedMediaType)
+
 		return
 	}
 
 	if !slices.Contains(allowedTypes, mediaType) {
 		utils.Warn.Println("Invalid media type: ", mediaType)
 		http.Error(w, "Invalid media type", http.StatusUnsupportedMediaType)
+
 		return
 	}
 
 	if len(body) == 0 {
 		utils.Warn.Println("Empty body")
 		http.Error(w, "Length required", http.StatusLengthRequired)
+
 		return
 	}
 
@@ -265,6 +277,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Warn.Println("Failed to generate key: ", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -272,6 +285,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Warn.Println("Failed to save document: ", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -291,7 +305,7 @@ func chooseKey(ctx context.Context) (string, error) {
 		}
 
 		data, err := db.Postgres.GetHaste(ctx, key)
-		if err != nil && err != db.PostgresNoRows {
+		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			return "", err
 		}
 

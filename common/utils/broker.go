@@ -120,7 +120,7 @@ func (n *NatsClient) handleMessage(message *nats.Msg) {
 			}
 		}
 
-		break;
+		break
 	case "potatbotat.api-request":
 	default:
 		Debug.Printf("[x] Unrecognized topic: %s", message.Subject)

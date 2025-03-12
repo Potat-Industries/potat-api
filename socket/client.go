@@ -6,9 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"potat-api/common/utils"
-
 	"github.com/gorilla/websocket"
+	"potat-api/common/utils"
 )
 
 const (
@@ -23,7 +22,7 @@ type EventCodes uint16
 
 const (
 	HELLO          EventCodes = 4444
-	RECIEVED_DATA  EventCodes = 4000
+	RECEIVED_DATA  EventCodes = 4000
 	RECONNECT      EventCodes = 4001
 	UNKNOWN_ERROR  EventCodes = 4002
 	INVALID_ORIGIN EventCodes = 4003
@@ -90,8 +89,10 @@ func (c *Client) sendEvent(opcode EventCodes, topic string, data any) error {
 func (c *Client) pongHandler(string) error {
 	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
 		utils.Warn.Println("Failed setting read deadline", err)
+
 		return err
 	}
+
 	return nil
 }
 
@@ -126,6 +127,7 @@ func (c *Client) writePingPumperDumper9000() {
 			}
 
 			c.closeHandler("TTL reached")
+
 			return
 		case message, ok := <-c.send:
 			if !ok {
@@ -134,6 +136,7 @@ func (c *Client) writePingPumperDumper9000() {
 
 			if err := c.sendMessage(websocket.TextMessage, message); err != nil {
 				utils.Warn.Printf("Failed writing message: %v", err)
+
 				return
 			}
 		}
@@ -174,12 +177,13 @@ func (c *Client) readPump() {
 					utils.Warn.Printf("Unexpected close error: %v", err)
 				}
 				c.closeHandler("Socket already closed")
+
 				break
 			}
 
 			utils.Warn.Printf("Received message from %s, closing connection...", c.id)
 			response := &PotatMessage{
-				Opcode: RECIEVED_DATA,
+				Opcode: RECEIVED_DATA,
 				Topic:  "Potat socket does not accept incoming messages 😡",
 			}
 
@@ -188,6 +192,7 @@ func (c *Client) readPump() {
 			}
 
 			c.closeHandler("Incoming messages not allowed")
+
 			return
 		}
 	}
@@ -197,6 +202,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		utils.Warn.Println("Failed to upgrade connection:", err)
+
 		return
 	}
 

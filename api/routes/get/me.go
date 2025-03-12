@@ -50,6 +50,7 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "Unauthorized"}},
 		}, start)
+
 		return
 	}
 
@@ -59,6 +60,7 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "User connections not found"}},
 		}, start)
+
 		return
 	}
 
@@ -80,6 +82,7 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "User Twitch connection not found"}},
 		}, start)
+
 		return
 	}
 
@@ -105,7 +108,6 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.GenericResponse(w, http.StatusOK, AuthorizedUserResponse{
-
 		Data: &[]SiteUserData{user},
 	}, start)
 }
