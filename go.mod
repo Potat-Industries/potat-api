@@ -5,7 +5,7 @@ go 1.23
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.30.0
 	github.com/fatih/color v1.18.0
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.4.2
 	github.com/jackc/pgx/v5 v5.7.1
