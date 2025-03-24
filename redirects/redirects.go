@@ -1,3 +1,4 @@
+// Package redirects provides a public api to create short redirect urls.
 package redirects
 
 import (
@@ -21,26 +22,26 @@ const createTable = `
 	);
 `
 
-var (
+type redirects struct {
 	server *http.Server
-	router *mux.Router
-)
-
-func init() {
-	router = mux.NewRouter()
-
-	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
-	router.Use(middleware.LogRequest)
-	router.Use(limiter)
-	router.HandleFunc("/{id}", getRedirect).Methods(http.MethodGet)
 }
 
+// StartServing will start the redirects server on the configured port.
 func StartServing(config common.Config) error {
 	if config.Redirects.Host == "" || config.Redirects.Port == "" {
 		utils.Error.Fatal("Config: Redirect host and port must be set")
 	}
 
-	server = &http.Server{
+	redirector := redirects{}
+
+	router := mux.NewRouter()
+
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
+	router.Use(middleware.LogRequest)
+	router.Use(limiter)
+	router.HandleFunc("/{id}", redirector.getRedirect).Methods(http.MethodGet)
+
+	redirector.server = &http.Server{
 		Handler:      router,
 		Addr:         config.Redirects.Host + ":" + config.Redirects.Port,
 		WriteTimeout: 15 * time.Second,
@@ -50,25 +51,19 @@ func StartServing(config common.Config) error {
 
 	db.Postgres.CheckTableExists(createTable)
 
-	utils.Info.Printf("Redirects listening on %s", server.Addr)
+	utils.Info.Printf("Redirects listening on %s", redirector.server.Addr)
 
-	return server.ListenAndServe()
+	return redirector.server.ListenAndServe()
 }
 
-func Stop() {
-	if err := server.Shutdown(context.Background()); err != nil {
-		utils.Error.Fatalf("Failed to shutdown server: %v", err)
-	}
-}
-
-func setRedis(key, data string) {
-	err := db.Redis.SetEx(context.Background(), key, data, time.Hour).Err()
+func (r *redirects) setRedis(ctx context.Context, key, data string) {
+	err := db.Redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
 		utils.Error.Printf("Error caching redirect: %v", err)
 	}
 }
 
-func getRedis(ctx context.Context, key string) (string, error) {
+func (r *redirects) getRedis(ctx context.Context, key string) (string, error) {
 	data, err := db.Redis.Get(ctx, key).Result()
 	if err != nil && !errors.Is(err, db.RedisErrNil) {
 		return "", err
@@ -77,35 +72,34 @@ func getRedis(ctx context.Context, key string) (string, error) {
 	return data, nil
 }
 
-func getRedirect(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
 	key := vars["id"]
 	if key == "" {
-		http.NotFound(w, r)
+		http.NotFound(writer, request)
 
 		return
 	}
 
-	cache, err := getRedis(r.Context(), key)
+	cache, err := r.getRedis(request.Context(), key)
 	if err == nil && cache != "" {
-		w.Header().Set("X-Cache-Hit", "HIT")
-		http.Redirect(w, r, cache, http.StatusSeeOther)
+		writer.Header().Set("X-Cache-Hit", "HIT")
+		http.Redirect(writer, request, cache, http.StatusSeeOther)
 
 		return
-	} else {
-		w.Header().Set("X-Cache-Hit", "MISS")
 	}
+	writer.Header().Set("X-Cache-Hit", "MISS")
 
-	redirect, err := db.Postgres.GetRedirectByKey(r.Context(), key)
+	redirect, err := db.Postgres.GetRedirectByKey(request.Context(), key)
 	if err != nil {
 		if errors.Is(err, db.PostgresNoRows) {
-			http.NotFound(w, r)
+			http.NotFound(writer, request)
 
 			return
 		}
 
 		utils.Error.Printf("Error fetching redirect: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
 	}
@@ -114,8 +108,8 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 		redirect = "https://" + redirect
 	}
 
-	go setRedis(key, redirect)
+	go r.setRedis(request.Context(), key, redirect)
 
-	r.Header.Set("X-Cache-Hit", "MISS")
-	http.Redirect(w, r, redirect, http.StatusSeeOther)
+	request.Header.Set("X-Cache-Hit", "MISS")
+	http.Redirect(writer, request, redirect, http.StatusSeeOther)
 }
