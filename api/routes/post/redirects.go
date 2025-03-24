@@ -18,7 +18,8 @@ func init() {
 		Path:    "/redirect",
 		Method:  http.MethodPost,
 		Handler: createRedirect,
-	}, false)
+		UseAuth: false,
+	})
 }
 
 func createRedirect(w http.ResponseWriter, r *http.Request) {

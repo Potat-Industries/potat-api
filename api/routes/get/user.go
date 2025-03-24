@@ -102,7 +102,8 @@ func init() {
 		Path:    "/users/{username}",
 		Method:  http.MethodGet,
 		Handler: getUsers,
-	}, false)
+		UseAuth: false,
+	})
 }
 
 func getQuizReady(lastQuiz int) bool {

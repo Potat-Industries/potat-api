@@ -29,7 +29,8 @@ func init() {
 		Path:    "/twitch/me",
 		Method:  http.MethodGet,
 		Handler: getAuthenticatedUser,
-	}, true)
+		UseAuth: true,
+	})
 }
 
 func getChannelState(ctx context.Context, channelID string, platform common.Platforms) string {

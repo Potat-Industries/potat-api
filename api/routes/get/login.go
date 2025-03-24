@@ -30,7 +30,8 @@ func init() {
 		Path:    "/login",
 		Method:  http.MethodGet,
 		Handler: twitchLoginHandler,
-	}, false)
+		UseAuth: false,
+	})
 }
 
 func setReplyDeny() string {

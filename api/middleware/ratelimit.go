@@ -11,18 +11,21 @@ import (
 	"potat-api/common/utils"
 )
 
+var errBadRedisResponse = errors.New("invalid result from Redis")
+
+// NewRateLimiter returns a new rate limiter middleware.
 func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := r.RemoteAddr
-			if forwardedFor := r.Header.Get("CF-Connecting-IP"); forwardedFor != "" {
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			ip := request.RemoteAddr
+			if forwardedFor := request.Header.Get("CF-Connecting-IP"); forwardedFor != "" {
 				ip = forwardedFor
 			}
 
-			allowed, remaining, remainingTTL, err := getIpToken(ip, r.Context(), limit, window)
+			allowed, remaining, remainingTTL, err := getIPToken(request.Context(), ip, limit, window)
 			if err != nil {
 				http.Error(
-					w,
+					writer,
 					http.StatusText(http.StatusInternalServerError),
 					http.StatusInternalServerError,
 				)
@@ -30,16 +33,16 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 				return
 			}
 
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(remainingTTL, 10))
-			w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(limit, 10))
-			w.Header().Set("X-RateLimit-Window", strconv.FormatInt(int64(window.Seconds()), 10))
-			w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
+			writer.Header().Set("X-RateLimit-Reset", strconv.FormatInt(remainingTTL, 10))
+			writer.Header().Set("X-RateLimit-Limit", strconv.FormatInt(limit, 10))
+			writer.Header().Set("X-RateLimit-Window", strconv.FormatInt(int64(window.Seconds()), 10))
+			writer.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
 
 			if !allowed {
-				w.Header().Set("Retry-After", strconv.FormatInt(remainingTTL, 10))
+				writer.Header().Set("Retry-After", strconv.FormatInt(remainingTTL, 10))
 
 				http.Error(
-					w,
+					writer,
 					http.StatusText(http.StatusTooManyRequests),
 					http.StatusTooManyRequests,
 				)
@@ -47,14 +50,14 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(writer, request)
 		})
 	}
 }
 
-func getIpToken(
-	ip string,
+func getIPToken(
 	ctx context.Context,
+	ip string,
 	limit int64,
 	window time.Duration,
 ) (bool, int64, int64, error) {
@@ -87,14 +90,30 @@ func getIpToken(
 		return false, 0, 0, err
 	}
 
-	results := result.([]interface{})
+	results, ok := result.([]interface{})
+	if !ok {
+		return false, 0, 0, errBadRedisResponse
+	}
 	if len(results) != 3 {
-		return false, 0, 0, errors.New("invalid result from Redis")
+		return false, 0, 0, errBadRedisResponse
 	}
 
-	remaining := limit - results[0].(int64)
-	allowed := results[1].(int64) == 1
-	remainingTTL := results[2].(int64)
+	remainder, ok := results[0].(int64)
+	if !ok {
+		return false, 0, 0, errBadRedisResponse
+	}
+	remaining := limit - remainder
+
+	allowedInt, ok := results[1].(int64)
+	if !ok {
+		return false, 0, 0, errBadRedisResponse
+	}
+	allowed := allowedInt == 1
+
+	remainingTTL, ok := results[2].(int64)
+	if !ok {
+		return false, 0, 0, errBadRedisResponse
+	}
 
 	return allowed, remaining, remainingTTL, nil
 }

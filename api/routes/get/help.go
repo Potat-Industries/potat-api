@@ -20,7 +20,8 @@ func init() {
 		Path:    "/help",
 		Method:  http.MethodGet,
 		Handler: getCommandsHandler,
-	}, false)
+		UseAuth: false,
+	})
 }
 
 func setCache(key string, data interface{}) {
