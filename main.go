@@ -61,6 +61,7 @@ func main() {
 		}()
 	}
 
+
 	hastebinChan := make(chan error)
 	if config.Haste.Enabled {
 		go func() {
