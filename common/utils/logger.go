@@ -1,3 +1,4 @@
+// Package utils provides utility functions for logging and other common tasks.
 package utils
 
 import (
@@ -9,31 +10,32 @@ import (
 	"github.com/fatih/color"
 )
 
+// Logger is a custom logger with log levels and colors.
 type Logger struct {
 	*log.Logger
-	level LogLevel
+	level string
+	text  color.Attribute
+	tag   color.Attribute
 }
 
-type LogLevel struct {
-	text color.Attribute
-	tag  color.Attribute
-}
-
+//nolint:gochecknoglobals,revive // skibidi toilet
 var (
-	INFO  = LogLevel{text: color.FgHiGreen, tag: color.BgHiGreen}
-	DEBUG = LogLevel{text: color.FgCyan, tag: color.BgCyan}
-	WARN  = LogLevel{text: color.FgYellow, tag: color.BgYellow}
-	ERROR = LogLevel{text: color.FgRed, tag: color.BgRed}
+	Info  = createLogger(color.FgHiGreen, color.BgHiGreen, "INFO")
+	Debug = createLogger(color.FgCyan, color.BgCyan, "DEBUG")
+	Warn  = createLogger(color.FgYellow, color.BgYellow, "WARN")
+	Error = createLogger(color.FgRed, color.BgRed, "ERROR")
 )
 
 func init() {
 	color.NoColor = false
 }
 
-func New(level LogLevel) *Logger {
+func createLogger(text, tag color.Attribute, level string) *Logger {
 	return &Logger{
 		Logger: log.New(os.Stdout, "", 0),
 		level:  level,
+		text:   text,
+		tag:    tag,
 	}
 }
 
@@ -44,58 +46,28 @@ func getLocalTime() string {
 	return now.Format("01/02/2006 15:04:05") + fmt.Sprintf(".%06d", now.Nanosecond()/1000)
 }
 
-func (l *Logger) toOutput(format *string, v ...interface{}) {
+func (l *Logger) toOutput(format *string, v ...any) {
 	var message string
 
 	timeString := getLocalTime()
 	if format != nil {
-		message = color.New(color.Attribute(l.level.text)).Sprintf(*format, v...)
+		message = color.New(l.text).Sprintf(*format, v...)
 	} else {
-		message = color.New(color.Attribute(l.level.text)).Sprint(v...)
+		message = color.New(l.text).Sprint(v...)
 	}
 
-	tag := color.New(color.Attribute(l.level.tag)).Sprintf(" %s ", l.levelString())
+	tag := color.New(l.tag).Sprintf(" %s ", l.level)
 	output := fmt.Sprintf("API %s %s %s", timeString, tag, message)
 
 	_ = l.Output(2, output)
 }
 
-func (l *Logger) Println(v ...interface{}) {
+// Println prints a message with a newline.
+func (l *Logger) Println(v ...any) {
 	l.toOutput(nil, v...)
 }
 
-func (l *Logger) Printf(format string, v ...interface{}) {
+// Printf prints a formatted message.
+func (l *Logger) Printf(format string, v ...any) {
 	l.toOutput(&format, v...)
 }
-
-func (l *Logger) Panicln(v ...interface{}) {
-	l.toOutput(nil, v...)
-	panic(v)
-}
-
-func (l *Logger) Panicf(format string, v ...interface{}) {
-	l.toOutput(&format, v...)
-	panic(v)
-}
-
-func (l *Logger) levelString() string {
-	switch l.level {
-	case INFO:
-		return "INFO"
-	case DEBUG:
-		return "DEBUG"
-	case WARN:
-		return "WARN"
-	case ERROR:
-		return "ERROR"
-	}
-
-	return ""
-}
-
-var (
-	Info  = New(LogLevel(INFO))
-	Warn  = New(LogLevel(WARN))
-	Debug = New(LogLevel(DEBUG))
-	Error = New(LogLevel(ERROR))
-)
