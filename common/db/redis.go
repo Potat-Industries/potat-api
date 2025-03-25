@@ -3,10 +3,9 @@ package db
 import (
 	"context"
 
+	"github.com/redis/go-redis/v9"
 	"potat-api/common"
 	"potat-api/common/logger"
-
-	"github.com/redis/go-redis/v9"
 )
 
 type RedisClient struct {

@@ -1,3 +1,4 @@
+// Package utils provides utility functions and types for all routes.
 package utils
 
 import (
@@ -8,6 +9,7 @@ import (
 	"time"
 )
 
+// RandomString generates a random hexadecimal string of the specified length.
 func RandomString(length int) (string, error) {
 	bytes := make([]byte, length/2)
 	_, err := rand.Read(bytes)
@@ -19,44 +21,45 @@ func RandomString(length int) (string, error) {
 	return hexKey, nil
 }
 
-func Humanize(d time.Duration, limit int) string {
-	if d == 0 {
+// Humanize converts a time.Duration into a human-readable string format.
+func Humanize(duration time.Duration, limit int) string {
+	if duration == 0 {
 		return "0s"
 	}
 
 	var result []string
-	if d.Hours() >= 8760 {
-		years := int(d.Hours() / 8760)
+	if duration.Hours() >= 8760 {
+		years := int(duration.Hours() / 8760)
 		result = append(result, fmt.Sprintf("%dy", years))
-		d -= time.Duration(years) * 8760 * time.Hour
+		duration -= time.Duration(years) * 8760 * time.Hour
 	}
 
-	if d.Hours() >= 720 {
-		months := int(d.Hours() / 720)
+	if duration.Hours() >= 720 {
+		months := int(duration.Hours() / 720)
 		result = append(result, fmt.Sprintf("%dmo", months))
-		d -= time.Duration(months) * 720 * time.Hour
+		duration -= time.Duration(months) * 720 * time.Hour
 	}
 
-	if d.Hours() >= 24 {
-		days := int(d.Hours() / 24)
+	if duration.Hours() >= 24 {
+		days := int(duration.Hours() / 24)
 		result = append(result, fmt.Sprintf("%dd", days))
-		d -= time.Duration(days) * 24 * time.Hour
+		duration -= time.Duration(days) * 24 * time.Hour
 	}
 
-	if d.Hours() >= 1 {
-		hours := int(d.Hours())
+	if duration.Hours() >= 1 {
+		hours := int(duration.Hours())
 		result = append(result, fmt.Sprintf("%dh", hours))
-		d -= time.Duration(hours) * time.Hour
+		duration -= time.Duration(hours) * time.Hour
 	}
 
-	if d.Minutes() >= 1 {
-		minutes := int(d.Minutes())
+	if duration.Minutes() >= 1 {
+		minutes := int(duration.Minutes())
 		result = append(result, fmt.Sprintf("%dm", minutes%60))
-		d -= time.Duration(minutes) * time.Minute
+		duration -= time.Duration(minutes) * time.Minute
 	}
 
-	if d.Seconds() >= 1 {
-		seconds := int(d.Seconds())
+	if duration.Seconds() >= 1 {
+		seconds := int(duration.Seconds())
 		result = append(result, fmt.Sprintf("%ds", seconds%60))
 	}
 

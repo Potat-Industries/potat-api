@@ -56,11 +56,11 @@ func NewRateLimiter(limit int64, window time.Duration, redis *db.RedisClient) fu
 }
 
 func getIPToken(
-	ctx 		context.Context,
-	ip 			string,
-	limit 	int64,
-	window 	time.Duration,
-	redis 	*db.RedisClient,
+	ctx context.Context,
+	ip string,
+	limit int64,
+	window time.Duration,
+	redis *db.RedisClient,
 ) (bool, int64, int64, error) {
 	// Set key expiry if its first request from an ip
 	luaScript := `

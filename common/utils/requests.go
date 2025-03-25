@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,35 +14,38 @@ import (
 	"potat-api/common/logger"
 )
 
-type GqlQuery struct {
+var (
+	errEmptyToken  = fmt.Errorf("empty token")
+	errFailRefresh = fmt.Errorf("failed to refresh token")
+	errStvFail     = fmt.Errorf("7tv request failed")
+)
+
+type gqlQuery struct {
 	Query string `json:"query"`
 }
 
-type StvResponse struct {
+type stvResponse struct {
 	Data   map[string]StvUser `json:"data"`
-	Errors []StvError         `json:"errors"`
+	Errors []stvError         `json:"errors"`
 }
 
+// StvUser represents a user from 7TV with their ID and avatar URL.
 type StvUser struct {
 	ID        string `json:"id"`
 	AvatarURL string `json:"avatar_url"`
 }
 
-type StvError struct {
+type stvError struct {
 	Message   string     `json:"message"`
-	Locations []Location `json:"locations"`
+	Locations []location `json:"locations"`
 }
 
-type Location struct {
+type location struct {
 	Line   int `json:"line"`
 	Column int `json:"column"`
 }
 
-var Make = &http.Client{
-	Timeout: time.Second * 10,
-}
-
-func MakeRequest(
+func makeRequest(
 	method string,
 	url string,
 	headers map[string]string,
@@ -51,7 +55,7 @@ func MakeRequest(
 		body = &bytes.Buffer{}
 	}
 
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequestWithContext(context.Background(), method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +64,11 @@ func MakeRequest(
 		req.Header.Set(k, v)
 	}
 
-	res, err := Make.Do(req)
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +76,7 @@ func MakeRequest(
 	return res, nil
 }
 
+// BatchLoadStvData fetches user data from 7TV for a batch of Twitch user IDs.
 func BatchLoadStvData(ids []string) ([]StvUser, error) {
 	var queryParts []string
 
@@ -82,7 +91,7 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 	query := fmt.Sprintf(`{%s}`, strings.Join(queryParts, " "))
 
 	var body bytes.Buffer
-	err := json.NewEncoder(&body).Encode(GqlQuery{Query: query})
+	err := json.NewEncoder(&body).Encode(gqlQuery{Query: query})
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +100,7 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 		"Content-Type": "application/json",
 	}
 
-	res, err := MakeRequest(
+	res, err := makeRequest(
 		"POST",
 		"https://7tv.io/v3/gql",
 		headers,
@@ -101,16 +110,22 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 		return nil, err
 	}
 
+	defer func() {
+		if err = res.Body.Close(); err != nil {
+			logger.Error.Println("Error closing response body:", err)
+		}
+	}()
+
 	logger.Warn.Printf("Response: %v", res)
 
-	var response StvResponse
+	var response stvResponse
 	err = json.NewDecoder(res.Body).Decode(&response)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(response.Errors) > 0 {
-		return nil, fmt.Errorf("error in 7TV response: %v", response.Errors)
+		return nil, errStvFail
 	}
 
 	var users []StvUser
@@ -121,15 +136,16 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 	return users, nil
 }
 
+// ValidateHelixToken checks if a given Twitch OAuth token is valid.
 func ValidateHelixToken(
 	token string,
 	returnAll bool,
 ) (bool, *common.TwitchValidation, error) {
 	if token == "" {
-		return false, &common.TwitchValidation{}, fmt.Errorf("empty token")
+		return false, &common.TwitchValidation{}, errEmptyToken
 	}
 
-	res, err := MakeRequest(
+	res, err := makeRequest(
 		"GET",
 		"https://id.twitch.tv/oauth2/validate",
 		map[string]string{"Authorization": "OAuth " + token},
@@ -139,7 +155,11 @@ func ValidateHelixToken(
 		return false, &common.TwitchValidation{}, err
 	}
 
-	defer res.Body.Close()
+	defer func() {
+		if err = res.Body.Close(); err != nil {
+			logger.Error.Println("Error closing response body:", err)
+		}
+	}()
 
 	if !returnAll {
 		return res.StatusCode != 401, &common.TwitchValidation{}, nil
@@ -154,9 +174,10 @@ func ValidateHelixToken(
 	return res.StatusCode != 401, &validation, nil
 }
 
-func RefreshHelixToken(token string) (*common.GenericOAUTHResponse, error) {
+// RefreshHelixToken refreshes a Twitch OAuth token using the refresh token flow.
+func RefreshHelixToken(config common.Config, token string) (*common.GenericOAUTHResponse, error) {
 	if token == "" {
-		return nil, fmt.Errorf("empty token provided bro")
+		return nil, errEmptyToken
 	}
 
 	if config.Twitch.ClientID == "" || config.Twitch.ClientSecret == "" {
@@ -170,7 +191,7 @@ func RefreshHelixToken(token string) (*common.GenericOAUTHResponse, error) {
 		"client_secret": {config.Twitch.ClientSecret},
 	}.Encode()
 
-	res, err := MakeRequest(
+	res, err := makeRequest(
 		"POST",
 		"https://id.twitch.tv/oauth2/token",
 		map[string]string{"Content-Type": "application/x-www-form-urlencoded"},
@@ -178,14 +199,18 @@ func RefreshHelixToken(token string) (*common.GenericOAUTHResponse, error) {
 	)
 
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to refresh token")
+		return nil, errFailRefresh
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	defer res.Body.Close()
+	defer func() {
+		if err = res.Body.Close(); err != nil {
+			logger.Error.Println("Error closing response body:", err)
+		}
+	}()
 
 	var response common.GenericOAUTHResponse
 	err = json.NewDecoder(res.Body).Decode(&response)

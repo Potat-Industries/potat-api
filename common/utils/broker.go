@@ -15,7 +15,7 @@ var errNatsNotConnected = errors.New("NATS client not connected")
 
 // NatsClient is a wrapper around the NATS client to handle message publishing and subscription.
 type NatsClient struct {
-	client        *nats.Conn
+	Client        *nats.Conn
 	proxySocketFn func([]byte) error
 }
 
@@ -29,7 +29,7 @@ func CreateNatsBroker(
 	}
 
 	client := NatsClient{
-		client: nc,
+		Client: nc,
 	}
 
 	ctx, cancel := context.WithCancel(parentContext)
@@ -61,7 +61,7 @@ func CreateNatsBroker(
 }
 
 func (n *NatsClient) subNatsStream(ctx context.Context) error {
-	sub, err := n.client.Subscribe("potatbotat.>", n.handleMessage)
+	sub, err := n.Client.Subscribe("potatbotat.>", n.handleMessage)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (n *NatsClient) subNatsStream(ctx context.Context) error {
 		}
 	}()
 
-	err = n.client.Publish("potat-api.connected", []byte(nil))
+	err = n.Client.Publish("potat-api.connected", []byte(nil))
 	if err != nil {
 		logger.Warn.Printf("Failed to publish connected message: %v", err)
 	}
@@ -89,11 +89,11 @@ func (n *NatsClient) SetProxySocketFn(fn func([]byte) error) {
 
 // Publish sends a message to the specified topic on the NATS server.
 func (n *NatsClient) Publish(topic string, data []byte) error {
-	if n.client == nil {
+	if n.Client == nil {
 		return errNatsNotConnected
 	}
 
-	err := n.client.Publish(topic, data)
+	err := n.Client.Publish(topic, data)
 	if err != nil {
 		return err
 	}

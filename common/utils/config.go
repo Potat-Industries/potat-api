@@ -1,3 +1,4 @@
+// Package utils provides utility functions and types for all routes.
 package utils
 
 import (
@@ -8,13 +9,8 @@ import (
 	"potat-api/common/logger"
 )
 
-var config *common.Config
-
+// LoadConfig loads the configuration from the config.json file.
 func LoadConfig() *common.Config {
-	if config != nil {
-		return config
-	}
-
 	data, err := loadOrCopy()
 	if err != nil {
 		logger.Error.Panicln("Failed loading config", err)
@@ -26,9 +22,7 @@ func LoadConfig() *common.Config {
 		logger.Error.Panicln("Failed unmarshaling config", err)
 	}
 
-	config = &configuration
-
-	return config
+	return &configuration
 }
 
 func loadOrCopy() ([]byte, error) {
@@ -52,7 +46,7 @@ func copyExampleConfig() ([]byte, error) {
 		return nil, err
 	}
 
-	err = os.WriteFile("config.json", data, 0o644)
+	err = os.WriteFile("config.json", data, 0o600)
 	if err != nil {
 		return nil, err
 	}

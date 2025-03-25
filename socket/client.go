@@ -7,9 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"potat-api/common/logger"
-
 	"github.com/gorilla/websocket"
+	"potat-api/common/logger"
 )
 
 const (

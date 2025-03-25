@@ -13,13 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/logger"
 	"potat-api/common/utils"
-
-	"github.com/gorilla/mux"
 )
 
 const createTable = `
@@ -41,7 +40,12 @@ type hastebin struct {
 }
 
 // StartServing will start the Haste server on the configured port.
-func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
+func StartServing(
+	config common.Config,
+	postgres *db.PostgresClient,
+	redis *db.RedisClient,
+	metrics *utils.Metrics,
+) error {
 	if config.Haste.Host == "" || config.Haste.Port == "" {
 		logger.Error.Fatal("Config: Haste host and port must be set")
 	}
@@ -55,7 +59,7 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 	router := mux.NewRouter()
 
 	limiter := middleware.NewRateLimiter(100, 1*time.Minute, redis)
-	router.Use(middleware.LogRequest)
+	router.Use(middleware.LogRequest(metrics))
 	router.Use(limiter)
 
 	staticPath := haste.loadStaticFilePath()

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/logger"
-
-	"github.com/gorilla/mux"
+	"potat-api/common/utils"
 )
 
 const createTable = `
@@ -30,7 +30,12 @@ type redirects struct {
 }
 
 // StartServing will start the redirects server on the configured port.
-func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
+func StartServing(
+	config common.Config,
+	postgres *db.PostgresClient,
+	redis *db.RedisClient,
+	metrics *utils.Metrics,
+) error {
 	if config.Redirects.Host == "" || config.Redirects.Port == "" {
 		logger.Error.Fatal("Config: Redirect host and port must be set")
 	}
@@ -43,7 +48,7 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 	router := mux.NewRouter()
 
 	limiter := middleware.NewRateLimiter(100, 1*time.Minute, redis)
-	router.Use(middleware.LogRequest)
+	router.Use(middleware.LogRequest(metrics))
 	router.Use(limiter)
 	router.HandleFunc("/{id}", redirector.getRedirect).Methods(http.MethodGet)
 

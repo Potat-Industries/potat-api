@@ -3,11 +3,10 @@ package db
 import (
 	"fmt"
 
-	"potat-api/common"
-	"potat-api/common/logger"
-
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"potat-api/common"
+	"potat-api/common/logger"
 )
 
 type ClickhouseClient struct {

@@ -14,15 +14,7 @@ type hub struct {
 	broadcast  chan []byte
 	register   chan *client
 	unregister chan *client
-}
-
-func newHub() *hub {
-	return &hub{
-		broadcast:  make(chan []byte),
-		register:   make(chan *client),
-		unregister: make(chan *client),
-		clients:    make(map[*client]bool),
-	}
+	metrics    *utils.Metrics
 }
 
 func (h *hub) run() {
@@ -30,10 +22,12 @@ func (h *hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
+			h.metrics.GaugeSocketConnections(float64(len(h.clients)))
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+				h.metrics.GaugeSocketConnections(float64(len(h.clients)))
 			}
 		case message := <-h.broadcast:
 			for client := range h.clients {
@@ -42,6 +36,7 @@ func (h *hub) run() {
 				default:
 					close(client.send)
 					delete(h.clients, client)
+					h.metrics.GaugeSocketConnections(float64(len(h.clients)))
 				}
 			}
 		}
@@ -59,8 +54,14 @@ func (h *hub) Send(message []byte) error {
 }
 
 // StartServing will start the socket server on the configured port.
-func StartServing(config common.Config, natsclient *utils.NatsClient) error {
-	hub := newHub()
+func StartServing(config common.Config, natsclient *utils.NatsClient, metrics *utils.Metrics) error {
+	hub := &hub{
+		broadcast:  make(chan []byte),
+		register:   make(chan *client),
+		unregister: make(chan *client),
+		clients:    make(map[*client]bool),
+		metrics:    metrics,
+	}
 	go hub.run()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

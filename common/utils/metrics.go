@@ -1,25 +1,39 @@
+// Package utils provides utility functions and types for all routes.
 package utils
 
 import (
 	"net/http"
-
-	"potat-api/common"
-	"potat-api/common/logger"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"potat-api/common"
+	"potat-api/common/logger"
 )
 
-var httpRequestCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "http_inbound_requests",
-	Help: "Inbound requests to bot endpoints",
-}, []string{"host", "endpoint", "ip", "method", "status", "cachehit"})
+// Metrics is a struct that holds the Prometheus metrics for the application.
+type Metrics struct {
+	httpRequestCounter *prometheus.CounterVec
+	socketGauge        prometheus.Gauge
+}
 
-func ObserveMetrics(config common.Config) error {
+// ObserveMetrics initializes and starts the Prometheus metrics server.
+func ObserveMetrics(config common.Config) (*Metrics, error) {
+	httpRequestCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "http_inbound_requests",
+		Help: "Inbound requests to bot endpoints",
+	}, []string{"host", "endpoint", "ip", "method", "status", "cachehit"})
+
+	socketGauge := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "socket_connections",
+		Help: "Number of active socket connections",
+	})
+
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(
 		httpRequestCounter,
+		socketGauge,
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -28,15 +42,22 @@ func ObserveMetrics(config common.Config) error {
 	connString := config.Prometheus.Host + ":" + config.Prometheus.Port
 	logger.Info.Printf("Metrics listening on %s", connString)
 
-	return http.ListenAndServe(connString, nil)
+	server := &http.Server{
+		Addr:         connString,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	return &Metrics{httpRequestCounter, socketGauge}, server.ListenAndServe()
 }
 
-func ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string) {
-	if httpRequestCounter == nil {
+// ObserveInboundRequests increments the counter for inbound requests to bot endpoints.
+func (m *Metrics) ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string) {
+	if m.httpRequestCounter == nil {
 		return
 	}
 
-	httpRequestCounter.WithLabelValues(
+	m.httpRequestCounter.WithLabelValues(
 		host,
 		endpoint,
 		ip,
@@ -44,4 +65,13 @@ func ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string)
 		status,
 		cachehit,
 	).Inc()
+}
+
+// GaugeSocketConnections is a gauge to track the number of active socket connections.
+func (m *Metrics) GaugeSocketConnections(value float64) {
+	if m.socketGauge == nil {
+		return
+	}
+
+	m.socketGauge.Set(value)
 }

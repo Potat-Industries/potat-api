@@ -53,7 +53,10 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			api.GenericResponse(w, http.StatusInternalServerError, common.GenericResponse[any]{
+				Data:   nil,
+				Errors: &[]common.ErrorMessage{{Message: "Internal Server Error"}},
+			}, start)
 		}
 	}()
 

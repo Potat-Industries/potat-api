@@ -20,9 +20,9 @@ const (
 
 // InjectDBMiddleware returns a middleware that injects DB clients into the request context.
 func InjectDatabases(
-	postgres 		*db.PostgresClient, 
-	redis 			*db.RedisClient, 
-	clickhouse 	*db.ClickhouseClient,
+	postgres *db.PostgresClient,
+	redis *db.RedisClient,
+	clickhouse *db.ClickhouseClient,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

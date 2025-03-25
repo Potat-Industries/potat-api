@@ -12,6 +12,7 @@ import (
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/logger"
+	"potat-api/common/utils"
 )
 
 // Route represents a single API route with its handler, path, method, and authentication requirement.
@@ -42,6 +43,7 @@ func StartServing(
 	postgres *db.PostgresClient,
 	redis *db.RedisClient,
 	clickhouse *db.ClickhouseClient,
+	metrics *utils.Metrics,
 ) error {
 	if config.API.Host == "" || config.API.Port == "" {
 		logger.Error.Fatal("Config: API host and port must be set")
@@ -50,11 +52,11 @@ func StartServing(
 	api := Server{
 		router: mux.NewRouter(),
 	}
-	
-	api.router.Use(middleware.LogRequest)
+
+	api.router.Use(middleware.LogRequest(metrics))
 	api.router.Use(middleware.InjectDatabases(postgres, redis, clickhouse))
 	api.router.Use(middleware.NewRateLimiter(100, 1*time.Minute, redis))
-	
+
 	authenticator := middleware.NewAuthenticator(config.Twitch.ClientSecret, GenericResponse)
 	api.authedRouter = api.router.PathPrefix("/").Subrouter()
 	api.authedRouter.Use(authenticator.SetDynamicAuthMiddleware())

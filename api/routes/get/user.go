@@ -9,13 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/logger"
-
-	"github.com/gorilla/mux"
 )
 
 type PotatoInfo struct {

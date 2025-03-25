@@ -37,9 +37,9 @@ func main() {
 	}
 
 	var nats *utils.NatsClient
-	if config.RabbitMQ.Enabled {
+	if config.Nats.Enabled {
 		nats = initNats(ctx)
-		defer nats.Stop()
+		defer nats.Client.Drain()
 	}
 
 	if config.Loops.Enabled {
@@ -56,45 +56,48 @@ func main() {
 		syscall.SIGINT,
 	)
 
+	var metrics *utils.Metrics
+	metricsChan := make(chan error)
+	if config.Prometheus.Enabled {
+		go func() {
+			var metricErr error
+			metrics, metricErr = utils.ObserveMetrics(*config)
+			metricsChan <- metricErr
+		}()
+	}
+
 	socketChan := make(chan error)
 	if config.Socket.Enabled {
 		go func() {
-			socketChan <- socket.StartServing(*config, nats)
+			socketChan <- socket.StartServing(*config, nats, metrics)
 		}()
 	}
 
 	hastebinChan := make(chan error)
 	if config.Haste.Enabled {
 		go func() {
-			hastebinChan <- haste.StartServing(*config, postgres, redis)
+			hastebinChan <- haste.StartServing(*config, postgres, redis, metrics)
 		}()
 	}
 
 	redirectsChan := make(chan error)
 	if config.Redirects.Enabled {
 		go func() {
-			redirectsChan <- redirects.StartServing(*config, postgres, redis)
+			redirectsChan <- redirects.StartServing(*config, postgres, redis, metrics)
 		}()
 	}
 
 	apiChan := make(chan error)
 	if config.API.Enabled {
 		go func() {
-			apiChan <- api.StartServing(*config, postgres, redis, clickhouse)
-		}()
-	}
-
-	metricsChan := make(chan error)
-	if config.Prometheus.Enabled {
-		go func() {
-			metricsChan <- utils.ObserveMetrics(*config)
+			apiChan <- api.StartServing(*config, postgres, redis, clickhouse, metrics)
 		}()
 	}
 
 	uploaderChan := make(chan error)
 	if config.Uploader.Enabled {
 		go func() {
-			uploaderChan <- uploader.StartServing(*config, postgres, redis)
+			uploaderChan <- uploader.StartServing(*config, postgres, redis, metrics)
 		}()
 	}
 

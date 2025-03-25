@@ -7,6 +7,9 @@
   "loops": {
     "enabled": true
   },
+  "nats": {
+    "enabled": true
+  },
   "api": {
     "enabled": false,
     "host": "localhost",
@@ -38,13 +41,6 @@
     "enabled": false,
     "host": "localhost",
     "port": ""
-  },
-  "rabbitmq": {
-    "enabled": true,
-    "host": "localhost",
-    "port": "",
-    "user": "",
-    "password": ""
   },
   "postgres": {
     "host": "localhost",

@@ -13,11 +13,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	"potat-api/common"
 	"potat-api/common/logger"
 	"potat-api/common/utils"
-
-	"github.com/robfig/cron/v3"
 )
 
 const DUMP_PATH = "./dump"
@@ -36,7 +35,7 @@ func StartLoops(
 	var err error
 	_, err = c.AddFunc("@hourly", func() {
 		go updateHourlyUsage(ctx, postgres)
-		go validateTokens(ctx, postgres)
+		go validateTokens(ctx, config, postgres)
 	})
 	if err != nil {
 		logger.Error.Println("Failed initializing cron updateHourlyUsage", err)
@@ -60,7 +59,7 @@ func StartLoops(
 		return
 	}
 	_, err = c.AddFunc("0 */2 * * *", func() {
-		refreshAllHelixTokens(ctx, postgres)
+		refreshAllHelixTokens(ctx, config, postgres)
 	})
 	if err != nil {
 		logger.Error.Println("Failed initializing cron refreshAllHelixTokens", err)
@@ -78,7 +77,7 @@ func StartLoops(
 	}
 	_, err = c.AddFunc("0 */12 * * *", func() {
 		go backupPostgres(ctx, postgres, natsClient, config)
-		go optimizeClickhouse(ctx, clickhouse)
+		go optimizeClickhouse(ctx, config, clickhouse)
 	})
 	if err != nil {
 		logger.Error.Println("Failed initializing cron backupPostgres", err)
@@ -297,13 +296,18 @@ func upsertOAuthToken(
 	return err
 }
 
-func refreshOrDelete(ctx context.Context, postgres *PostgresClient, con common.PlatformOauth) (bool, error) {
+func refreshOrDelete(
+	ctx context.Context,
+	config common.Config,
+	postgres *PostgresClient,
+	con common.PlatformOauth,
+) (bool, error) {
 	var err error
 	if con.RefreshToken == "" {
 		return false, errors.New("missing refresh token")
 	}
 
-	refreshResult, err := utils.RefreshHelixToken(con.RefreshToken)
+	refreshResult, err := utils.RefreshHelixToken(config, con.RefreshToken)
 	if err != nil || refreshResult == nil {
 		return false, err
 	}
@@ -320,7 +324,7 @@ func refreshOrDelete(ctx context.Context, postgres *PostgresClient, con common.P
 	return true, nil
 }
 
-func validateTokens(ctx context.Context, postgres *PostgresClient) {
+func validateTokens(ctx context.Context, config common.Config, postgres *PostgresClient) {
 	logger.Info.Println("Validating Twitch tokens ")
 
 	query := `
@@ -359,7 +363,7 @@ func validateTokens(ctx context.Context, postgres *PostgresClient) {
 		}
 
 		if !valid {
-			ok, err := refreshOrDelete(ctx, postgres, con)
+			ok, err := refreshOrDelete(ctx, config, postgres, con)
 			if err != nil {
 				logger.Error.Println("Error refreshing token ", err)
 				deleted++
@@ -388,7 +392,7 @@ func validateTokens(ctx context.Context, postgres *PostgresClient) {
 	)
 }
 
-func refreshAllHelixTokens(ctx context.Context, postgres *PostgresClient) {
+func refreshAllHelixTokens(ctx context.Context, config common.Config, postgres *PostgresClient) {
 	logger.Info.Println("Refreshing all Twitch tokens")
 
 	query := `
@@ -431,7 +435,7 @@ func refreshAllHelixTokens(ctx context.Context, postgres *PostgresClient) {
 			continue
 		}
 
-		ok, err := refreshOrDelete(ctx, postgres, con)
+		ok, err := refreshOrDelete(ctx, config, postgres, con)
 		if err != nil {
 			logger.Error.Println("Error refreshing token ", err)
 			failed++
@@ -613,13 +617,12 @@ func getDatabaseSize(ctx context.Context, postgres *PostgresClient, dbName strin
 	return "", fmt.Errorf("no rows returned for database size query")
 }
 
-func optimizeClickhouse(ctx context.Context, clickhouse *ClickhouseClient) {
+func optimizeClickhouse(ctx context.Context, config common.Config, clickhouse *ClickhouseClient) {
 	// offset any concurrent crons
 	time.Sleep(5 * time.Minute)
 
 	logger.Info.Println("Optimizing Clickhouse tables")
 
-	config := utils.LoadConfig()
 	if config.Clickhouse.Database == "" {
 		logger.Error.Println("Clickhouse database is not configured")
 

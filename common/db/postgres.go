@@ -8,11 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"potat-api/common"
-	"potat-api/common/logger"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"potat-api/common"
+	"potat-api/common/logger"
 )
 
 type PostgresClient struct {

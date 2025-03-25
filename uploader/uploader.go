@@ -11,13 +11,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/logger"
 	"potat-api/common/utils"
-
-	"github.com/gorilla/mux"
 )
 
 const maxFileSize = 20971520 // 20MB
@@ -59,7 +58,12 @@ func getHashGenerator(secret string) func(key string) string {
 }
 
 // StartServing will start the uploader server on the configured port.
-func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
+func StartServing(
+	config common.Config,
+	postgres *db.PostgresClient,
+	redis *db.RedisClient,
+	metrics *utils.Metrics,
+) error {
 	if config.Uploader.Host == "" || config.Uploader.Port == "" {
 		logger.Error.Fatal("Config: Uploader host and port must be set")
 	}
@@ -74,7 +78,7 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 
 	router := mux.NewRouter()
 
-	router.Use(middleware.LogRequest)
+	router.Use(middleware.LogRequest(metrics))
 	router.Use(middleware.NewRateLimiter(200, 1*time.Minute, redis))
 	router.HandleFunc("/{key}", uploader.handleGet).Methods(http.MethodGet)
 
