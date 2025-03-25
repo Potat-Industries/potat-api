@@ -13,6 +13,7 @@ import (
 	_ "potat-api/api/routes/post"
 	"potat-api/common"
 	"potat-api/common/db"
+	"potat-api/common/logger"
 	"potat-api/common/utils"
 	"potat-api/haste"
 	"potat-api/redirects"
@@ -21,7 +22,7 @@ import (
 )
 
 func main() {
-	utils.Info.Println("Starting Potat API...")
+	logger.Info.Println("Starting Potat API...")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	config := utils.LoadConfig()
@@ -45,7 +46,7 @@ func main() {
 		go db.StartLoops(ctx, *config, nats, postgres, clickhouse, redis)
 	}
 
-	utils.Info.Println("Startup complete, serving APIs...")
+	logger.Info.Println("Startup complete, serving APIs...")
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(
@@ -99,30 +100,30 @@ func main() {
 
 	select {
 	case err := <-hastebinChan:
-		utils.Error.Panicln("Hastebin server error! ", err)
+		logger.Error.Panicln("Hastebin server error! ", err)
 	case err := <-redirectsChan:
-		utils.Error.Panicln("Redirects server error! ", err)
+		logger.Error.Panicln("Redirects server error! ", err)
 	case err := <-apiChan:
-		utils.Error.Panicln("API server error! ", err)
+		logger.Error.Panicln("API server error! ", err)
 	case err := <-metricsChan:
-		utils.Error.Panicln("Metrics server error! ", err)
+		logger.Error.Panicln("Metrics server error! ", err)
 	case err := <-uploaderChan:
-		utils.Error.Panicln("Uploader server error! ", err)
+		logger.Error.Panicln("Uploader server error! ", err)
 	case err := <-socketChan:
-		utils.Error.Panicln("Socket server error! ", err)
+		logger.Error.Panicln("Socket server error! ", err)
 	case <-shutdownChan:
-		utils.Warn.Println("Shutdown requested...")
+		logger.Warn.Println("Shutdown requested...")
 	}
 
 	if config.API.Enabled {
 		clickhouse.Close()
-		utils.Warn.Println("Clickhouse connection closed")
+		logger.Warn.Println("Clickhouse connection closed")
 	}
 
 	postgres.Close()
-	utils.Warn.Println("Postgres connection closed")
+	logger.Warn.Println("Postgres connection closed")
 	redis.Close()
-	utils.Warn.Println("Redis connection closed")
+	logger.Warn.Println("Redis connection closed")
 
 	cancel()
 }
@@ -144,7 +145,7 @@ func runWithTimeout(
 		case err := <-done:
 			return err
 		case <-attemptCtx.Done():
-			utils.Warn.Println("Ping timed out, retrying...")
+			logger.Warn.Println("Ping timed out, retrying...")
 			lastError = errors.New("ping timed out")
 		}
 	}
@@ -155,13 +156,13 @@ func runWithTimeout(
 func initPostgres(config common.Config, ctx context.Context) *db.PostgresClient {
 	postgres, err := db.InitPostgres(config)
 	if err != nil {
-		utils.Error.Panicln("Failed initializing Postgres", err)
+		logger.Error.Panicln("Failed initializing Postgres", err)
 	}
 	err = runWithTimeout(postgres.Ping, ctx)
 	if err != nil {
-		utils.Error.Panicln("Failed pinging Postgres", err)
+		logger.Error.Panicln("Failed pinging Postgres", err)
 	}
-	utils.Info.Println("Postgres initialized")
+	logger.Info.Println("Postgres initialized")
 
 	return postgres
 }
@@ -169,14 +170,14 @@ func initPostgres(config common.Config, ctx context.Context) *db.PostgresClient 
 func initRedis(config common.Config, ctx context.Context) *db.RedisClient {
 	redis, err := db.InitRedis(config)
 	if err != nil {
-		utils.Error.Panicln("Failed initializing Redis", err)
+		logger.Error.Panicln("Failed initializing Redis", err)
 	}
 
 	err = redis.Ping(ctx).Err()
 	if err != nil {
-		utils.Error.Panicln("Failed pinging Redis", err)
+		logger.Error.Panicln("Failed pinging Redis", err)
 	}
-	utils.Info.Println("Redis initialized")
+	logger.Info.Println("Redis initialized")
 
 	return redis
 }
@@ -184,14 +185,14 @@ func initRedis(config common.Config, ctx context.Context) *db.RedisClient {
 func initClickhouse(config common.Config, ctx context.Context) *db.ClickhouseClient {
 	ch, err := db.InitClickhouse(config)
 	if err != nil {
-		utils.Error.Panicln("Failed initializing Clickhouse", err)
+		logger.Error.Panicln("Failed initializing Clickhouse", err)
 	}
 
 	err = runWithTimeout(ch.Ping, ctx)
 	if err != nil {
-		utils.Error.Panicln("Failed pinging Clickhouse", err)
+		logger.Error.Panicln("Failed pinging Clickhouse", err)
 	}
-	utils.Info.Println("Clickhouse initialized")
+	logger.Info.Println("Clickhouse initialized")
 
 	return ch
 }
@@ -199,7 +200,7 @@ func initClickhouse(config common.Config, ctx context.Context) *db.ClickhouseCli
 func initNats(ctx context.Context) *utils.NatsClient {
 	nats, err := utils.CreateNatsBroker(ctx)
 	if err != nil {
-		utils.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
+		logger.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
 	}
 
 	return nats

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"potat-api/common/db"
-	"potat-api/common/utils"
+	"potat-api/common/logger"
 )
 
 var errBadRedisResponse = errors.New("invalid result from Redis")
@@ -86,7 +86,7 @@ func getIPToken(
 		limit,
 	).Result()
 	if err != nil {
-		utils.Error.Println("Error evaluating Lua script", err)
+		logger.Error.Println("Error evaluating Lua script", err)
 
 		return false, 0, 0, err
 	}

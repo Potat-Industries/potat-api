@@ -11,6 +11,7 @@ import (
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
+	"potat-api/common/logger"
 	"potat-api/common/utils"
 )
 
@@ -26,7 +27,7 @@ func init() {
 func createRedirect(w http.ResponseWriter, r *http.Request) {
 	var input common.Redirect
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		utils.Error.Printf("Invalid request body: %v", err)
+		logger.Error.Printf("Invalid request body: %v", err)
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 
 		return
@@ -38,7 +39,7 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 
 	postgres, ok := r.Context().Value(middleware.PostgresKey).(*db.PostgresClient)
 	if !ok {
-		utils.Error.Println("Postgres client not found in context")
+		logger.Error.Println("Postgres client not found in context")
 
 		return
 	}
@@ -48,7 +49,7 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 		response := fmt.Sprintf("https://%s/%s", r.Host, key)
 		_, err := w.Write([]byte(response))
 		if err != nil {
-			utils.Error.Printf("Failed to write response: %v", err)
+			logger.Error.Printf("Failed to write response: %v", err)
 		}
 
 		return
@@ -56,14 +57,14 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 
 	key, err = generateUniqueKey(r.Context())
 	if err != nil {
-		utils.Error.Printf("Error generating key: %v", err)
+		logger.Error.Printf("Error generating key: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 
 		return
 	}
 
 	if err := postgres.NewRedirect(r.Context(), key, input.URL); err != nil {
-		utils.Error.Printf("Error inserting redirect: %v", err)
+		logger.Error.Printf("Error inserting redirect: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 
 		return
@@ -72,14 +73,14 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 	response := fmt.Sprintf("https://%s/%s", r.Host, key)
 	_, err = w.Write([]byte(response))
 	if err != nil {
-		utils.Error.Printf("Failed to write response: %v", err)
+		logger.Error.Printf("Failed to write response: %v", err)
 	}
 }
 
 func generateUniqueKey(ctx context.Context) (string, error) {
 	postgres, ok := ctx.Value(middleware.PostgresKey).(*db.PostgresClient)
 	if !ok {
-		utils.Error.Println("Postgres client not found in context")
+		logger.Error.Println("Postgres client not found in context")
 
 		return "", middleware.ErrMissingContext
 	}

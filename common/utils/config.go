@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"potat-api/common"
+	"potat-api/common/logger"
 )
 
 var config *common.Config
@@ -16,13 +17,13 @@ func LoadConfig() *common.Config {
 
 	data, err := loadOrCopy()
 	if err != nil {
-		Error.Panicln("Failed loading config", err)
+		logger.Error.Panicln("Failed loading config", err)
 	}
 
 	var configuration common.Config
 	err = json.Unmarshal(data, &configuration)
 	if err != nil {
-		Error.Panicln("Failed unmarshaling config", err)
+		logger.Error.Panicln("Failed unmarshaling config", err)
 	}
 
 	config = &configuration
@@ -44,7 +45,7 @@ func loadOrCopy() ([]byte, error) {
 }
 
 func copyExampleConfig() ([]byte, error) {
-	Warn.Println("Config file not found, copying example config")
+	logger.Warn.Println("Config file not found, copying example config")
 
 	data, err := os.ReadFile("exampleconfig.json")
 	if err != nil {

@@ -3,10 +3,11 @@ package db
 import (
 	"fmt"
 
+	"potat-api/common"
+	"potat-api/common/logger"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"potat-api/common"
-	"potat-api/common/utils"
 )
 
 type ClickhouseClient struct {
@@ -33,7 +34,7 @@ func InitClickhouse(config common.Config) (*ClickhouseClient, error) {
 	options := &clickhouse.Options{
 		Addr:   []string{fmt.Sprintf("%s:%s", host, port)},
 		Auth:   clickhouse.Auth{Username: user, Password: config.Clickhouse.Password},
-		Debugf: utils.Debug.Printf,
+		Debugf: logger.Debug.Printf,
 	}
 
 	conn, err := clickhouse.Open(options)

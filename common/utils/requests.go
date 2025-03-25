@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"potat-api/common"
+	"potat-api/common/logger"
 )
 
 type GqlQuery struct {
@@ -100,7 +101,7 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 		return nil, err
 	}
 
-	Warn.Printf("Response: %v", res)
+	logger.Warn.Printf("Response: %v", res)
 
 	var response StvResponse
 	err = json.NewDecoder(res.Body).Decode(&response)
@@ -159,7 +160,7 @@ func RefreshHelixToken(token string) (*common.GenericOAUTHResponse, error) {
 	}
 
 	if config.Twitch.ClientID == "" || config.Twitch.ClientSecret == "" {
-		Debug.Fatalln("Twitch client ID or secret not set")
+		logger.Debug.Fatalln("Twitch client ID or secret not set")
 	}
 
 	params := url.Values{

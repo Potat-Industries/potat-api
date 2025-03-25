@@ -10,7 +10,7 @@ import (
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
-	"potat-api/common/utils"
+	"potat-api/common/logger"
 )
 
 type SiteUserData struct {
@@ -36,7 +36,7 @@ func init() {
 func getChannelState(ctx context.Context, channelID string, platform common.Platforms) string {
 	postgres, ok := ctx.Value(middleware.PostgresKey).(*db.PostgresClient)
 	if !ok {
-		utils.Error.Println("Postgres client not found in context")
+		logger.Error.Println("Postgres client not found in context")
 
 		return "NEVER"
 	}
@@ -97,13 +97,13 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 	var stvMeta common.StvUserMeta
 	err := json.Unmarshal(stvConnection.Meta, &stvMeta)
 	if err != nil {
-		utils.Error.Println("Error unmarshalling stv meta: ", err)
+		logger.Error.Println("Error unmarshalling stv meta: ", err)
 	}
 
 	var twitchMeta common.TwitchUserMeta
 	err = json.Unmarshal(twitchConnection.Meta, &twitchMeta)
 	if err != nil {
-		utils.Error.Println("Error unmarshalling twitch meta: ", err)
+		logger.Error.Println("Error unmarshalling twitch meta: ", err)
 	}
 
 	user := SiteUserData{

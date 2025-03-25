@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
+	"potat-api/common/logger"
 	"potat-api/common/utils"
+
+	"github.com/gorilla/mux"
 )
 
 const maxFileSize = 20971520 // 20MB
@@ -59,7 +61,7 @@ func getHashGenerator(secret string) func(key string) string {
 // StartServing will start the uploader server on the configured port.
 func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
 	if config.Uploader.Host == "" || config.Uploader.Port == "" {
-		utils.Error.Fatal("Config: Uploader host and port must be set")
+		logger.Error.Fatal("Config: Uploader host and port must be set")
 	}
 
 	uploader := &uploader{
@@ -102,7 +104,7 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 
 	uploader.postgres.CheckTableExists(createTable)
 
-	utils.Info.Printf("Uploader listening on %s", uploader.server.Addr)
+	logger.Info.Printf("Uploader listening on %s", uploader.server.Addr)
 
 	return uploader.server.ListenAndServe()
 }
@@ -110,14 +112,14 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 func (u *uploader) setRedis(ctx context.Context, key string, data []byte) {
 	err := u.redis.SetEx(ctx, key, data, u.cacheDuration).Err()
 	if err != nil {
-		utils.Warn.Printf("Failed to cache document: %v", err)
+		logger.Warn.Printf("Failed to cache document: %v", err)
 	}
 }
 
 func (u *uploader) handleUpload(writer http.ResponseWriter, request *http.Request) {
 	err := request.ParseMultipartForm(maxFileSize)
 	if err != nil {
-		utils.Error.Printf("Error parsing form: %v", err)
+		logger.Error.Printf("Error parsing form: %v", err)
 		http.Error(writer, "Failed to parse form", http.StatusBadRequest)
 
 		return
@@ -125,21 +127,21 @@ func (u *uploader) handleUpload(writer http.ResponseWriter, request *http.Reques
 
 	file, header, err := request.FormFile("file")
 	if err != nil {
-		utils.Error.Printf("Error retrieving file: %v", err)
+		logger.Error.Printf("Error retrieving file: %v", err)
 		http.Error(writer, "File is required", http.StatusBadRequest)
 
 		return
 	}
 	defer func() {
 		if err = file.Close(); err != nil {
-			utils.Error.Printf("Error closing file: %v", err)
+			logger.Error.Printf("Error closing file: %v", err)
 		}
 	}()
 
 	fileName := header.Filename
 	fileData, err := io.ReadAll(file)
 	if err != nil {
-		utils.Error.Printf("Error reading file: %v", err)
+		logger.Error.Printf("Error reading file: %v", err)
 		http.Error(writer, "Failed to read file", http.StatusInternalServerError)
 
 		return
@@ -149,7 +151,7 @@ func (u *uploader) handleUpload(writer http.ResponseWriter, request *http.Reques
 
 	key, err := utils.RandomString(u.keyLength)
 	if err != nil {
-		utils.Error.Printf("Error generating key: %v", err)
+		logger.Error.Printf("Error generating key: %v", err)
 		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
@@ -163,7 +165,7 @@ func (u *uploader) handleUpload(writer http.ResponseWriter, request *http.Reques
 		fileName,
 	)
 	if !ok {
-		utils.Error.Printf("Error inserting upload: %v", err)
+		logger.Error.Printf("Error inserting upload: %v", err)
 		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
@@ -181,7 +183,7 @@ func (u *uploader) handleUpload(writer http.ResponseWriter, request *http.Reques
 		DeleteHash: u.hasher(key + createdAt.String()),
 	})
 	if err != nil {
-		utils.Error.Printf("Error encoding response: %v", err)
+		logger.Error.Printf("Error encoding response: %v", err)
 	}
 }
 
@@ -227,7 +229,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 		writer.WriteHeader(http.StatusOK)
 		_, err = writer.Write(cache)
 		if err != nil {
-			utils.Warn.Printf("Failed to write document: %v", err)
+			logger.Warn.Printf("Failed to write document: %v", err)
 		}
 
 		return
@@ -241,7 +243,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 	}
 
 	if err != nil {
-		utils.Warn.Printf("Failed to get document: %v", err)
+		logger.Warn.Printf("Failed to get document: %v", err)
 		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
@@ -255,7 +257,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 	writer.Header().Set("Content-Type", mimeType)
 	_, err = writer.Write(data)
 	if err != nil {
-		utils.Error.Printf("Error writing file: %v", err)
+		logger.Error.Printf("Error writing file: %v", err)
 		http.Error(writer, "Failed to write file", http.StatusInternalServerError)
 	}
 }

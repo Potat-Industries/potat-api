@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
-	"potat-api/common/utils"
+	"potat-api/common/logger"
+
+	"github.com/gorilla/mux"
 )
 
 const createTable = `
@@ -31,7 +32,7 @@ type redirects struct {
 // StartServing will start the redirects server on the configured port.
 func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
 	if config.Redirects.Host == "" || config.Redirects.Port == "" {
-		utils.Error.Fatal("Config: Redirect host and port must be set")
+		logger.Error.Fatal("Config: Redirect host and port must be set")
 	}
 
 	redirector := redirects{
@@ -56,7 +57,7 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 
 	redirector.postgres.CheckTableExists(createTable)
 
-	utils.Info.Printf("Redirects listening on %s", redirector.server.Addr)
+	logger.Info.Printf("Redirects listening on %s", redirector.server.Addr)
 
 	return redirector.server.ListenAndServe()
 }
@@ -64,7 +65,7 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 func (r *redirects) setRedis(ctx context.Context, key, data string) {
 	err := r.redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
-		utils.Error.Printf("Error caching redirect: %v", err)
+		logger.Error.Printf("Error caching redirect: %v", err)
 	}
 }
 
@@ -103,7 +104,7 @@ func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Reques
 			return
 		}
 
-		utils.Error.Printf("Error fetching redirect: %v", err)
+		logger.Error.Printf("Error fetching redirect: %v", err)
 		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return

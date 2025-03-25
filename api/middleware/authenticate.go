@@ -13,7 +13,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"potat-api/common"
 	"potat-api/common/db"
-	"potat-api/common/utils"
+	"potat-api/common/logger"
 )
 
 var (
@@ -56,7 +56,7 @@ func NewAuthenticator(secret string, unauthorizedFunc unauthFunc) *Authenticator
 }
 
 func (a *Authenticator) sendUnauthorized(w http.ResponseWriter) {
-	utils.Warn.Println("Unauthorized request")
+	logger.Warn.Println("Unauthorized request")
 	a.unauthorizedFunc(w, http.StatusTeapot, unauthorizedResponse{
 		Data:   &[]string{},
 		Errors: &[]common.ErrorMessage{{Message: "Unauthorized"}},
@@ -115,14 +115,14 @@ func (a *Authenticator) verifyDynamicAuth(ctx context.Context, token string) (bo
 
 	postgres, ok := ctx.Value(PostgresKey).(*db.PostgresClient)
 	if !ok {
-		utils.Error.Println("Postgres client not found in context")
+		logger.Error.Println("Postgres client not found in context")
 
 		return false, &common.User{}
 	}
 
 	user, err := postgres.GetUserByInternalID(ctx, claims.UserID)
 	if err != nil {
-		utils.Warn.Println("Error fetching authenticated user: ", err)
+		logger.Warn.Println("Error fetching authenticated user: ", err)
 
 		return false, &common.User{}
 	}

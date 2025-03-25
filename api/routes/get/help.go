@@ -11,6 +11,7 @@ import (
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
+	"potat-api/common/logger"
 	"potat-api/common/utils"
 )
 
@@ -28,21 +29,21 @@ func init() {
 func setCache(ctx context.Context, key string, data interface{}) {
 	redis, ok := ctx.Value(middleware.RedisKey).(*db.RedisClient)
 	if !ok {
-		utils.Error.Println("Redis client not found in context")
+		logger.Error.Println("Redis client not found in context")
 
 		return
 	}
 
 	err := redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
-		utils.Error.Printf("Error caching commands: %v", err)
+		logger.Error.Printf("Error caching commands: %v", err)
 	}
 }
 
 func getCache(ctx context.Context, key string) (*[]common.Command, error) {
 	redis, ok := ctx.Value(middleware.RedisKey).(*db.RedisClient)
 	if !ok {
-		utils.Error.Println("Redis client not found in context")
+		logger.Error.Println("Redis client not found in context")
 
 		return nil, middleware.ErrMissingContext
 	}
@@ -77,7 +78,7 @@ func getCommands(ctx context.Context, writer http.ResponseWriter, start time.Tim
 	var commandsJson []common.Command
 	err := json.Unmarshal(data, &commandsJson)
 	if err != nil {
-		utils.Error.Printf("Error unmarshalling commands: %v", err)
+		logger.Error.Printf("Error unmarshalling commands: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, HelpResponse{
 			Data:   &[]common.Command{},
 			Errors: &[]common.ErrorMessage{{Message: "Error unmarshalling commands"}},
@@ -117,7 +118,7 @@ func getCommandsHandler(writer http.ResponseWriter, request *http.Request) {
 		"get-commands",
 	)
 	if err != nil {
-		utils.Error.Printf("Error getting commands: %v", err)
+		logger.Error.Printf("Error getting commands: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, HelpResponse{
 			Data:   &[]common.Command{},
 			Errors: &[]common.ErrorMessage{{Message: "Error getting commands"}},

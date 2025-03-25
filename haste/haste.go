@@ -13,11 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
+	"potat-api/common/logger"
 	"potat-api/common/utils"
+
+	"github.com/gorilla/mux"
 )
 
 const createTable = `
@@ -41,7 +43,7 @@ type hastebin struct {
 // StartServing will start the Haste server on the configured port.
 func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
 	if config.Haste.Host == "" || config.Haste.Port == "" {
-		utils.Error.Fatal("Config: Haste host and port must be set")
+		logger.Error.Fatal("Config: Haste host and port must be set")
 	}
 
 	haste := hastebin{
@@ -84,7 +86,7 @@ func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.R
 
 	haste.postgres.CheckTableExists(createTable)
 
-	utils.Info.Printf("Haste listening on %s", haste.server.Addr)
+	logger.Info.Printf("Haste listening on %s", haste.server.Addr)
 
 	return haste.server.ListenAndServe()
 }
@@ -101,7 +103,7 @@ func (h *hastebin) getRedis(ctx context.Context, key string) (string, error) {
 func (h *hastebin) setRedis(ctx context.Context, key, data string) {
 	err := h.redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
-		utils.Warn.Printf("Failed to cache document: %v", err)
+		logger.Warn.Printf("Failed to cache document: %v", err)
 
 		return
 	}
@@ -110,7 +112,7 @@ func (h *hastebin) setRedis(ctx context.Context, key, data string) {
 func (h *hastebin) loadStaticFilePath() string {
 	pwd, err := os.Getwd()
 	if err != nil {
-		utils.Error.Panic("Failed loading Haste static file path: ", err)
+		logger.Error.Panic("Failed loading Haste static file path: ", err)
 	}
 
 	return filepath.Join(pwd, "./haste/static")
@@ -132,7 +134,7 @@ func (h *hastebin) loadStaticFiles(staticPath string) map[string]bool {
 		return nil
 	})
 	if err != nil {
-		utils.Error.Fatalf("Failed to load static files: %v", err)
+		logger.Error.Fatalf("Failed to load static files: %v", err)
 	}
 
 	return files
@@ -153,7 +155,7 @@ func (h *hastebin) handleGet(writer http.ResponseWriter, request *http.Request) 
 		writer.WriteHeader(http.StatusOK)
 		err = json.NewEncoder(writer).Encode(map[string]string{"key": key, "data": cache})
 		if err != nil {
-			utils.Warn.Println("Failed to write document: ", err)
+			logger.Warn.Println("Failed to write document: ", err)
 		}
 
 		return
@@ -161,7 +163,7 @@ func (h *hastebin) handleGet(writer http.ResponseWriter, request *http.Request) 
 
 	data, err := h.postgres.GetHaste(request.Context(), key)
 	if err != nil || data == "" {
-		utils.Warn.Printf("Failed to get document: %v", err)
+		logger.Warn.Printf("Failed to get document: %v", err)
 		http.Error(writer, "Document not found", http.StatusNotFound)
 
 		return
@@ -174,7 +176,7 @@ func (h *hastebin) handleGet(writer http.ResponseWriter, request *http.Request) 
 	writer.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(writer).Encode(map[string]string{"key": key, "data": data})
 	if err != nil {
-		utils.Warn.Println("Failed to write document: ", err)
+		logger.Warn.Println("Failed to write document: ", err)
 	}
 }
 
@@ -197,7 +199,7 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 		writer.WriteHeader(http.StatusOK)
 		_, err = writer.Write([]byte(cache))
 		if err != nil {
-			utils.Warn.Println("Failed to write document: ", err)
+			logger.Warn.Println("Failed to write document: ", err)
 		}
 
 		return
@@ -205,7 +207,7 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 
 	data, err := h.postgres.GetHaste(request.Context(), key)
 	if err != nil || data == "" {
-		utils.Warn.Printf("Failed to get document: %v", err)
+		logger.Warn.Printf("Failed to get document: %v", err)
 		http.Error(writer, "Document not found", http.StatusNotFound)
 
 		return
@@ -218,7 +220,7 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 	writer.WriteHeader(http.StatusOK)
 	_, err = writer.Write([]byte(data))
 	if err != nil {
-		utils.Warn.Println("Failed to write document: ", err)
+		logger.Warn.Println("Failed to write document: ", err)
 	}
 }
 
@@ -232,20 +234,20 @@ func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request)
 
 	body, err := io.ReadAll(request.Body)
 	if err != nil {
-		utils.Warn.Println("Error reading request body: ", err)
+		logger.Warn.Println("Error reading request body: ", err)
 		http.Error(writer, "Error reading request body", http.StatusInternalServerError)
 
 		return
 	}
 	defer func() {
 		if err = request.Body.Close(); err != nil {
-			utils.Warn.Println("Error closing hastebin request body: ", err)
+			logger.Warn.Println("Error closing hastebin request body: ", err)
 		}
 	}()
 
 	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
 	if err != nil {
-		utils.Warn.Println("Error parsing media type: ", err)
+		logger.Warn.Println("Error parsing media type: ", err)
 		http.Error(writer, "Invalid content type", http.StatusUnsupportedMediaType)
 
 		return
@@ -259,14 +261,14 @@ func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request)
 	}
 
 	if !allowedTypes[mediaType] {
-		utils.Warn.Println("Invalid media type: ", mediaType)
+		logger.Warn.Println("Invalid media type: ", mediaType)
 		http.Error(writer, "Invalid media type", http.StatusUnsupportedMediaType)
 
 		return
 	}
 
 	if len(body) == 0 {
-		utils.Warn.Println("Empty body")
+		logger.Warn.Println("Empty body")
 		http.Error(writer, "Length required", http.StatusLengthRequired)
 
 		return
@@ -274,7 +276,7 @@ func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request)
 
 	key, err := h.chooseKey(request.Context())
 	if err != nil {
-		utils.Warn.Println("Failed to generate key: ", err)
+		logger.Warn.Println("Failed to generate key: ", err)
 		http.Error(writer, "Internal server error", http.StatusInternalServerError)
 
 		return
@@ -282,7 +284,7 @@ func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request)
 
 	err = h.postgres.NewHaste(request.Context(), key, body, request.RemoteAddr)
 	if err != nil {
-		utils.Warn.Println("Failed to save document: ", err)
+		logger.Warn.Println("Failed to save document: ", err)
 		http.Error(writer, "Internal server error", http.StatusInternalServerError)
 
 		return
@@ -292,7 +294,7 @@ func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request)
 	writer.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(writer).Encode(map[string]string{"key": key})
 	if err != nil {
-		utils.Warn.Println("Failed to write response: ", err)
+		logger.Warn.Println("Failed to write response: ", err)
 	}
 }
 

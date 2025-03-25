@@ -7,6 +7,7 @@ import (
 	"time"
 
 	nats "github.com/nats-io/nats.go"
+	"potat-api/common/logger"
 )
 
 type NatsClient struct {
@@ -32,7 +33,7 @@ func CreateNatsBroker(
 		for {
 			err := client.subNatsStream(ctx)
 			if err != nil {
-				Warn.Printf("NATS connection error: %v", err)
+				logger.Warn.Printf("NATS connection error: %v", err)
 			}
 
 			select {
@@ -40,7 +41,7 @@ func CreateNatsBroker(
 				return
 			default:
 				{
-					Warn.Println("NATS connection lost, reconnecting...")
+					logger.Warn.Println("NATS connection lost, reconnecting...")
 					cancel()
 
 					time.Sleep(5 * time.Second)
@@ -75,9 +76,9 @@ func (n *NatsClient) SetProxySocketFn(fn func([]byte) error) {
 func (n *NatsClient) Stop() {
 	if n.client != nil {
 		if err := n.client.Drain(); err != nil {
-			Error.Printf("Failed to drain NATS connection: %v", err)
+			logger.Error.Printf("Failed to drain NATS connection: %v", err)
 		}
-		Warn.Println("NATS connection closed")
+		logger.Warn.Println("NATS connection closed")
 	}
 }
 
@@ -90,7 +91,7 @@ func (n *NatsClient) Publish(topic string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	Debug.Printf("[x] Sent %s", data)
+	logger.Debug.Printf("[x] Sent %s", data)
 
 	return nil
 }
@@ -104,26 +105,26 @@ func (n *NatsClient) handleMessage(message *nats.Msg) {
 	case "potatbotat.ping":
 		err := n.Publish("potat-api.pong", []byte(nil))
 		if err != nil {
-			Warn.Printf("Failed to send pong: %v", err)
+			logger.Warn.Printf("Failed to send pong: %v", err)
 		}
 	case "potatbotat.pong":
-		Debug.Println("PotatBotat Reconnected to API")
+		logger.Debug.Println("PotatBotat Reconnected to API")
 		err := n.Publish("potat-api.ping", []byte(nil))
 		if err != nil {
-			Warn.Printf("Failed to send ping: %v", err)
+			logger.Warn.Printf("Failed to send ping: %v", err)
 		}
 	case "potatbotat.proxy-socket":
 		if n.proxySocketFn != nil {
 			err := n.proxySocketFn(message.Data)
 			if err != nil {
-				Warn.Printf("Failed to proxy socket: %v", err)
+				logger.Warn.Printf("Failed to proxy socket: %v", err)
 			}
 		}
 
 		break
 	case "potatbotat.api-request":
 	default:
-		Debug.Printf("[x] Unrecognized topic: %s", message.Subject)
+		logger.Debug.Printf("[x] Unrecognized topic: %s", message.Subject)
 	}
 }
 

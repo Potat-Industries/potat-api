@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"potat-api/common/logger"
 	"potat-api/common/utils"
 )
 
@@ -64,11 +65,11 @@ func LogRequest(next http.Handler) http.Handler {
 
 		switch {
 		case loggingRW.statusCode >= 500:
-			utils.Error.Println(line)
+			logger.Error.Println(line)
 		case loggingRW.statusCode >= 400 && loggingRW.statusCode < 500:
-			utils.Warn.Println(line)
+			logger.Warn.Println(line)
 		default:
-			utils.Debug.Println(line)
+			logger.Debug.Println(line)
 		}
 	})
 }

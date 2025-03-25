@@ -8,10 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"potat-api/common"
+	"potat-api/common/logger"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"potat-api/common"
-	"potat-api/common/utils"
 )
 
 type PostgresClient struct {
@@ -73,7 +74,7 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) {
 
 	dbConfig, err := pgxpool.ParseConfig(constring)
 	if err != nil {
-		utils.Error.Panicln("Error parsing database config", err)
+		logger.Error.Panicln("Error parsing database config", err)
 	}
 
 	dbConfig.MaxConns = 32
@@ -89,7 +90,7 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) {
 func (db *PostgresClient) CheckTableExists(createTable string) {
 	_, err := db.Pool.Exec(context.Background(), createTable)
 	if err != nil {
-		utils.Error.Fatalf("Failed to create table: %v", err)
+		logger.Error.Fatalf("Failed to create table: %v", err)
 	}
 }
 
@@ -689,7 +690,7 @@ func (db *PostgresClient) NewUpload(
 	var createdAt time.Time
 	err := db.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
 	if err != nil {
-		utils.Error.Println("Error scanning upload", err)
+		logger.Error.Println("Error scanning upload", err)
 
 		return false, nil
 	}

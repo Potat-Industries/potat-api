@@ -11,7 +11,7 @@ import (
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
-	"potat-api/common/utils"
+	"potat-api/common/logger"
 )
 
 // Route represents a single API route with its handler, path, method, and authentication requirement.
@@ -44,7 +44,7 @@ func StartServing(
 	clickhouse *db.ClickhouseClient,
 ) error {
 	if config.API.Host == "" || config.API.Port == "" {
-		utils.Error.Fatal("Config: API host and port must be set")
+		logger.Error.Fatal("Config: API host and port must be set")
 	}
 
 	api := Server{
@@ -67,10 +67,10 @@ func StartServing(
 		IdleTimeout:  60 * time.Second,
 	}
 
-	utils.Info.Printf("API listening on %s", api.server.Addr)
+	logger.Info.Printf("API listening on %s", api.server.Addr)
 
 	for _, route := range registry.routes {
-		utils.Info.Printf("Registering route: %s %s", route.Method, route.Path)
+		logger.Info.Printf("Registering route: %s %s", route.Method, route.Path)
 		api.registerRoute(route)
 	}
 
@@ -112,6 +112,6 @@ func GenericResponse(
 
 	err := json.NewEncoder(writer).Encode(response)
 	if err != nil {
-		utils.Error.Printf("Error encoding response: %v", err)
+		logger.Error.Printf("Error encoding response: %v", err)
 	}
 }

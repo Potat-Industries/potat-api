@@ -1,5 +1,5 @@
-// Package utils provides utility functions for logging and other common tasks.
-package utils
+// Package logger provides utility functions for logging and other common tasks.
+package logger
 
 import (
 	"fmt"

@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"potat-api/common/logger"
+
 	"github.com/gorilla/websocket"
-	"potat-api/common/utils"
 )
 
 const (
@@ -81,7 +82,7 @@ func (c *client) sendEvent(opcode eventCodes, topic string, data any) error {
 
 func (c *client) pongHandler(string) error {
 	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		utils.Warn.Println("Failed setting read deadline", err)
+		logger.Warn.Println("Failed setting read deadline", err)
 
 		return err
 	}
@@ -104,10 +105,10 @@ func (c *client) writePingPumperDumper9000() {
 			return
 		case <-pingTicker.C:
 			if err := c.sendMessage(websocket.PingMessage, nil); err != nil {
-				utils.Warn.Println("Failed to send ping message:", err)
+				logger.Warn.Println("Failed to send ping message:", err)
 			}
 		case <-ttlTicker.C:
-			utils.Warn.Printf("Client %s has reached TTL, sending reconnect message...", c.id)
+			logger.Warn.Printf("Client %s has reached TTL, sending reconnect message...", c.id)
 
 			response := &potatMessage{
 				Opcode: reconnect,
@@ -116,7 +117,7 @@ func (c *client) writePingPumperDumper9000() {
 
 			time.Sleep(2 * time.Second)
 			if err := c.sendJSON(response); err != nil {
-				utils.Warn.Printf("Failed to send reconnect message: %v", err)
+				logger.Warn.Printf("Failed to send reconnect message: %v", err)
 			}
 
 			c.closeHandler("TTL reached")
@@ -128,7 +129,7 @@ func (c *client) writePingPumperDumper9000() {
 			}
 
 			if err := c.sendMessage(websocket.TextMessage, message); err != nil {
-				utils.Warn.Printf("Failed writing message: %v", err)
+				logger.Warn.Printf("Failed writing message: %v", err)
 
 				return
 			}
@@ -146,9 +147,9 @@ func (c *client) closeHandler(reason string) {
 		c.hub.unregister <- c
 
 		if err := c.conn.Close(); err != nil {
-			utils.Warn.Println("Failed closing connection: ", err)
+			logger.Warn.Println("Failed closing connection: ", err)
 		} else {
-			utils.Warn.Printf("Socket closed for %s, reason: %s", c.id, reason)
+			logger.Warn.Printf("Socket closed for %s, reason: %s", c.id, reason)
 		}
 	})
 }
@@ -165,23 +166,23 @@ func (c *client) readPump() {
 			_, _, err := c.conn.ReadMessage()
 			if err != nil {
 				if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-					utils.Warn.Printf("Normal close error: %v", err)
+					logger.Warn.Printf("Normal close error: %v", err)
 				} else if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					utils.Warn.Printf("Unexpected close error: %v", err)
+					logger.Warn.Printf("Unexpected close error: %v", err)
 				}
 				c.closeHandler("Socket already closed")
 
 				break
 			}
 
-			utils.Warn.Printf("Received message from %s, closing connection...", c.id)
+			logger.Warn.Printf("Received message from %s, closing connection...", c.id)
 			response := &potatMessage{
 				Opcode: receivedData,
 				Topic:  "Potat socket does not accept incoming messages 😡",
 			}
 
 			if err := c.sendJSON(response); err != nil {
-				utils.Warn.Printf("Failed to send incoming messages response: %v", err)
+				logger.Warn.Printf("Failed to send incoming messages response: %v", err)
 			}
 
 			c.closeHandler("Incoming messages not allowed")
@@ -202,7 +203,7 @@ func serveWs(hub *hub, writer http.ResponseWriter, request *http.Request) {
 
 	conn, err := upgrader.Upgrade(writer, request, nil)
 	if err != nil {
-		utils.Warn.Println("Failed to upgrade connection:", err)
+		logger.Warn.Println("Failed to upgrade connection:", err)
 
 		return
 	}
@@ -229,8 +230,8 @@ func serveWs(hub *hub, writer http.ResponseWriter, request *http.Request) {
 		Topic:  "Welcome to Potat socket!",
 	})
 	if err != nil {
-		utils.Warn.Println("Failed to send welcome message:", err)
+		logger.Warn.Println("Failed to send welcome message:", err)
 	}
 
-	utils.Info.Printf("Potat socket connection from %s", actor)
+	logger.Info.Printf("Potat socket connection from %s", actor)
 }

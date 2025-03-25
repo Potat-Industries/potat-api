@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"potat-api/common"
+	"potat-api/common/logger"
 	"potat-api/common/utils"
 )
 
@@ -67,7 +68,7 @@ func StartServing(config common.Config, natsclient *utils.NatsClient) error {
 	})
 
 	addr := config.Socket.Host + ":" + config.Socket.Port
-	utils.Info.Printf("Socket server listening on %s", addr)
+	logger.Info.Printf("Socket server listening on %s", addr)
 
 	natsclient.SetProxySocketFn(hub.Send)
 

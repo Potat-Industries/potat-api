@@ -13,6 +13,7 @@ import (
 
 	"potat-api/api"
 	"potat-api/common"
+	"potat-api/common/logger"
 	"potat-api/common/utils"
 )
 
@@ -149,6 +150,6 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write([]byte(html))
 	if err != nil {
-		utils.Warn.Println("Failed to write document: ", err)
+		logger.Warn.Println("Failed to write document: ", err)
 	}
 }

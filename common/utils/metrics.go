@@ -3,10 +3,12 @@ package utils
 import (
 	"net/http"
 
+	"potat-api/common"
+	"potat-api/common/logger"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"potat-api/common"
 )
 
 var httpRequestCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -24,7 +26,7 @@ func ObserveMetrics(config common.Config) error {
 
 	http.Handle("/metrics", promhttp.Handler())
 	connString := config.Prometheus.Host + ":" + config.Prometheus.Port
-	Info.Printf("Metrics listening on %s", connString)
+	logger.Info.Printf("Metrics listening on %s", connString)
 
 	return http.ListenAndServe(connString, nil)
 }

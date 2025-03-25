@@ -9,12 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"potat-api/api"
 	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
-	"potat-api/common/utils"
+	"potat-api/common/logger"
+
+	"github.com/gorilla/mux"
 )
 
 type PotatoInfo struct {
@@ -185,14 +186,14 @@ func tidyPotatoInfo(
 func loadUser(ctx context.Context, user string) UserInfo {
 	postgres, ok := ctx.Value(middleware.PostgresKey).(*db.PostgresClient)
 	if !ok {
-		utils.Error.Println("Postgres client not found in context")
+		logger.Error.Println("Postgres client not found in context")
 
 		return UserInfo{}
 	}
 
 	redis, ok := ctx.Value(middleware.RedisKey).(*db.RedisClient)
 	if !ok {
-		utils.Error.Println("Redis client not found in context")
+		logger.Error.Println("Redis client not found in context")
 
 		return UserInfo{}
 	}
@@ -216,7 +217,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := postgres.GetUserByName(ctx, user)
 		if err != nil && !errors.Is(err, db.PostgresNoRows) {
-			utils.Warn.Println("Error fetching user data: ", err)
+			logger.Warn.Println("Error fetching user data: ", err)
 		} else {
 			userData = data
 		}
@@ -227,7 +228,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := postgres.GetChannelByName(ctx, user, common.Platforms(common.TWITCH))
 		if err != nil && !errors.Is(err, db.PostgresNoRows) {
-			utils.Warn.Println("Error fetching channel data: ", err)
+			logger.Warn.Println("Error fetching channel data: ", err)
 		} else {
 			channelData = data
 		}
@@ -238,7 +239,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := postgres.GetPotatoData(ctx, user)
 		if err != nil && !errors.Is(err, db.PostgresNoRows) {
-			utils.Warn.Println("Error fetching potato data: ", err)
+			logger.Warn.Println("Error fetching potato data: ", err)
 		} else {
 			potatData = data
 		}
@@ -249,7 +250,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := redis.Get(ctx, fmt.Sprintf("potato:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
-			utils.Warn.Println("Error fetching last potato: ", err)
+			logger.Warn.Println("Error fetching last potato: ", err)
 		} else {
 			lastPotato = data
 		}
@@ -260,7 +261,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := redis.Get(ctx, fmt.Sprintf("cdr:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
-			utils.Warn.Println("Error fetching last cdr: ", err)
+			logger.Warn.Println("Error fetching last cdr: ", err)
 		} else {
 			lastCDR = data
 		}
@@ -271,7 +272,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := redis.Get(ctx, fmt.Sprintf("trample:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
-			utils.Warn.Println("Error fetching last trample: ", err)
+			logger.Warn.Println("Error fetching last trample: ", err)
 		} else {
 			lastTrample = data
 		}
@@ -282,7 +283,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := redis.Get(ctx, fmt.Sprintf("steal:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
-			utils.Warn.Println("Error fetching last steal: ", err)
+			logger.Warn.Println("Error fetching last steal: ", err)
 		} else {
 			lastSteal = data
 		}
@@ -293,7 +294,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := redis.Get(ctx, fmt.Sprintf("eat:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
-			utils.Warn.Println("Error fetching last eat: ", err)
+			logger.Warn.Println("Error fetching last eat: ", err)
 		} else {
 			lastEat = data
 		}
@@ -304,7 +305,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 		data, err := redis.Get(ctx, fmt.Sprintf("quiz:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
-			utils.Warn.Println("Error fetching last quiz: ", err)
+			logger.Warn.Println("Error fetching last quiz: ", err)
 		} else {
 			lastQuiz = data
 		}
