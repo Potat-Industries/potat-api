@@ -1,3 +1,4 @@
+// Package utils provides utility functions and types for all routes.
 package utils
 
 import (
@@ -10,11 +11,15 @@ import (
 	"potat-api/common/logger"
 )
 
+var errNatsNotConnected = errors.New("NATS client not connected")
+
+// NatsClient is a wrapper around the NATS client to handle message publishing and subscription.
 type NatsClient struct {
 	client        *nats.Conn
 	proxySocketFn func([]byte) error
 }
 
+// CreateNatsBroker initializes a NATS client and starts a goroutine to handle reconnections.
 func CreateNatsBroker(
 	parentContext context.Context,
 ) (*NatsClient, error) {
@@ -60,31 +65,32 @@ func (n *NatsClient) subNatsStream(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer sub.Unsubscribe()
+	defer func() {
+		err = sub.Unsubscribe()
+		if err != nil {
+			logger.Warn.Printf("Failed to unsubscribe NATs topic: %v", err)
+		}
+	}()
 
-	n.client.Publish("potat-api.connected", []byte(nil))
+	err = n.client.Publish("potat-api.connected", []byte(nil))
+	if err != nil {
+		logger.Warn.Printf("Failed to publish connected message: %v", err)
+	}
 
 	<-ctx.Done()
 
 	return nil
 }
 
+// SetProxySocketFn sets the function to handle proxy socket messages.
 func (n *NatsClient) SetProxySocketFn(fn func([]byte) error) {
 	n.proxySocketFn = fn
 }
 
-func (n *NatsClient) Stop() {
-	if n.client != nil {
-		if err := n.client.Drain(); err != nil {
-			logger.Error.Printf("Failed to drain NATS connection: %v", err)
-		}
-		logger.Warn.Println("NATS connection closed")
-	}
-}
-
+// Publish sends a message to the specified topic on the NATS server.
 func (n *NatsClient) Publish(topic string, data []byte) error {
 	if n.client == nil {
-		return errors.New("NATS connection not established")
+		return errNatsNotConnected
 	}
 
 	err := n.client.Publish(topic, data)
@@ -96,6 +102,30 @@ func (n *NatsClient) Publish(topic string, data []byte) error {
 	return nil
 }
 
+func (n *NatsClient) onPing() {
+	err := n.Publish("potat-api.pong", []byte(nil))
+	if err != nil {
+		logger.Warn.Printf("Failed to send pong: %v", err)
+	}
+}
+
+func (n *NatsClient) onPong() {
+	logger.Debug.Println("PotatBotat Reconnected to API")
+	err := n.Publish("potat-api.ping", []byte(nil))
+	if err != nil {
+		logger.Warn.Printf("Failed to send ping: %v", err)
+	}
+}
+
+func (n *NatsClient) onProxySocket(message *nats.Msg) {
+	if n.proxySocketFn != nil {
+		err := n.proxySocketFn(message.Data)
+		if err != nil {
+			logger.Warn.Printf("Failed to proxy socket: %v", err)
+		}
+	}
+}
+
 func (n *NatsClient) handleMessage(message *nats.Msg) {
 	if message == nil {
 		return
@@ -103,33 +133,19 @@ func (n *NatsClient) handleMessage(message *nats.Msg) {
 
 	switch message.Subject {
 	case "potatbotat.ping":
-		err := n.Publish("potat-api.pong", []byte(nil))
-		if err != nil {
-			logger.Warn.Printf("Failed to send pong: %v", err)
-		}
+		n.onPing()
 	case "potatbotat.pong":
-		logger.Debug.Println("PotatBotat Reconnected to API")
-		err := n.Publish("potat-api.ping", []byte(nil))
-		if err != nil {
-			logger.Warn.Printf("Failed to send ping: %v", err)
-		}
+		n.onPong()
 	case "potatbotat.proxy-socket":
-		if n.proxySocketFn != nil {
-			err := n.proxySocketFn(message.Data)
-			if err != nil {
-				logger.Warn.Printf("Failed to proxy socket: %v", err)
-			}
-		}
-
-		break
+		n.onProxySocket(message)
 	case "potatbotat.api-request":
 	default:
 		logger.Debug.Printf("[x] Unrecognized topic: %s", message.Subject)
 	}
 }
 
+// BridgeRequest sends a request to the NATS server and waits for a response.
 func BridgeRequest(
-	ctx context.Context,
 	ttl time.Duration,
 	request string,
 ) ([]byte, error) {

@@ -113,7 +113,6 @@ func getCommandsHandler(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	response, err := utils.BridgeRequest(
-		request.Context(),
 		5*time.Second,
 		"get-commands",
 	)
