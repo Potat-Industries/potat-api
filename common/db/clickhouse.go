@@ -9,9 +9,12 @@ import (
 	"potat-api/common/utils"
 )
 
-var Clickhouse driver.Conn
+type ClickhouseClient struct {
+	driver.Conn
+}
 
-func InitClickhouse(config common.Config) error {
+// InitClickhouse initializes a ClickHouse connection using the provided configuration.
+func InitClickhouse(config common.Config) (*ClickhouseClient, error) {
 	host := config.Clickhouse.Host
 	if host == "" {
 		host = "localhost"
@@ -35,10 +38,8 @@ func InitClickhouse(config common.Config) error {
 
 	conn, err := clickhouse.Open(options)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	Clickhouse = conn
-
-	return nil
+	return &ClickhouseClient{conn}, nil
 }

@@ -113,7 +113,14 @@ func (a *Authenticator) verifyDynamicAuth(ctx context.Context, token string) (bo
 		return false, &common.User{}
 	}
 
-	user, err := db.Postgres.GetUserByInternalID(ctx, claims.UserID)
+	postgres, ok := ctx.Value(PostgresKey).(*db.PostgresClient)
+	if !ok {
+		utils.Error.Println("Postgres client not found in context")
+
+		return false, &common.User{}
+	}
+
+	user, err := postgres.GetUserByInternalID(ctx, claims.UserID)
 	if err != nil {
 		utils.Warn.Println("Error fetching authenticated user: ", err)
 

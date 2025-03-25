@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"potat-api/api"
+	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
@@ -35,7 +36,14 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 		input.URL = "https://" + input.URL
 	}
 
-	key, err := db.Postgres.GetKeyByRedirect(r.Context(), input.URL)
+	postgres, ok := r.Context().Value(middleware.PostgresKey).(*db.PostgresClient)
+	if !ok {
+		utils.Error.Println("Postgres client not found in context")
+
+		return
+	}
+
+	key, err := postgres.GetKeyByRedirect(r.Context(), input.URL)
 	if err == nil && key != "" {
 		response := fmt.Sprintf("https://%s/%s", r.Host, key)
 		_, err := w.Write([]byte(response))
@@ -54,7 +62,7 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := db.Postgres.NewRedirect(r.Context(), key, input.URL); err != nil {
+	if err := postgres.NewRedirect(r.Context(), key, input.URL); err != nil {
 		utils.Error.Printf("Error inserting redirect: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 
@@ -69,12 +77,19 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func generateUniqueKey(ctx context.Context) (string, error) {
+	postgres, ok := ctx.Value(middleware.PostgresKey).(*db.PostgresClient)
+	if !ok {
+		utils.Error.Println("Postgres client not found in context")
+
+		return "", middleware.ErrMissingContext
+	}
+
 	for {
 		key, err := utils.RandomString(6)
 		if err != nil {
 			return "", err
 		}
-		if db.Postgres.RedirectExists(ctx, key) {
+		if postgres.RedirectExists(ctx, key) {
 			return key, nil
 		}
 	}

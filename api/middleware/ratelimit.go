@@ -14,7 +14,7 @@ import (
 var errBadRedisResponse = errors.New("invalid result from Redis")
 
 // NewRateLimiter returns a new rate limiter middleware.
-func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.Handler {
+func NewRateLimiter(limit int64, window time.Duration, redis *db.RedisClient) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			ip := request.RemoteAddr
@@ -22,7 +22,7 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 				ip = forwardedFor
 			}
 
-			allowed, remaining, remainingTTL, err := getIPToken(request.Context(), ip, limit, window)
+			allowed, remaining, remainingTTL, err := getIPToken(request.Context(), ip, limit, window, redis)
 			if err != nil {
 				http.Error(
 					writer,
@@ -56,10 +56,11 @@ func NewRateLimiter(limit int64, window time.Duration) func(http.Handler) http.H
 }
 
 func getIPToken(
-	ctx context.Context,
-	ip string,
-	limit int64,
-	window time.Duration,
+	ctx 		context.Context,
+	ip 			string,
+	limit 	int64,
+	window 	time.Duration,
+	redis 	*db.RedisClient,
 ) (bool, int64, int64, error) {
 	// Set key expiry if its first request from an ip
 	luaScript := `
@@ -77,7 +78,7 @@ func getIPToken(
 		return {current, allowed, ttl}
 	`
 
-	result, err := db.Redis.Eval(
+	result, err := redis.Eval(
 		ctx,
 		luaScript,
 		[]string{ip},

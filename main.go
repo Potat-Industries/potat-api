@@ -23,15 +23,16 @@ import (
 func main() {
 	utils.Info.Println("Starting Potat API...")
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	config := utils.LoadConfig()
 
-	initPostgres(*config, ctx)
+	postgres := initPostgres(*config, ctx)
 
-	initRedis(*config, ctx)
+	redis := initRedis(*config, ctx)
 
+	var clickhouse *db.ClickhouseClient
 	if config.API.Enabled || config.Loops.Enabled {
-		initClickhouse(*config, ctx)
+		clickhouse = initClickhouse(*config, ctx)
 	}
 
 	var nats *utils.NatsClient
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	if config.Loops.Enabled {
-		go db.StartLoops(*config, nats)
+		go db.StartLoops(ctx, *config, nats, postgres, clickhouse, redis)
 	}
 
 	utils.Info.Println("Startup complete, serving APIs...")
@@ -61,25 +62,24 @@ func main() {
 		}()
 	}
 
-
 	hastebinChan := make(chan error)
 	if config.Haste.Enabled {
 		go func() {
-			hastebinChan <- haste.StartServing(*config)
+			hastebinChan <- haste.StartServing(*config, postgres, redis)
 		}()
 	}
 
 	redirectsChan := make(chan error)
 	if config.Redirects.Enabled {
 		go func() {
-			redirectsChan <- redirects.StartServing(*config)
+			redirectsChan <- redirects.StartServing(*config, postgres, redis)
 		}()
 	}
 
 	apiChan := make(chan error)
 	if config.API.Enabled {
 		go func() {
-			apiChan <- api.StartServing(*config)
+			apiChan <- api.StartServing(*config, postgres, redis, clickhouse)
 		}()
 	}
 
@@ -93,7 +93,7 @@ func main() {
 	uploaderChan := make(chan error)
 	if config.Uploader.Enabled {
 		go func() {
-			uploaderChan <- uploader.StartServing(*config)
+			uploaderChan <- uploader.StartServing(*config, postgres, redis)
 		}()
 	}
 
@@ -115,14 +115,16 @@ func main() {
 	}
 
 	if config.API.Enabled {
-		db.Clickhouse.Close()
+		clickhouse.Close()
 		utils.Warn.Println("Clickhouse connection closed")
 	}
 
-	db.Postgres.Pool.Close()
+	postgres.Close()
 	utils.Warn.Println("Postgres connection closed")
-	db.Redis.Close()
+	redis.Close()
 	utils.Warn.Println("Redis connection closed")
+
+	cancel()
 }
 
 func runWithTimeout(
@@ -150,42 +152,48 @@ func runWithTimeout(
 	return lastError
 }
 
-func initPostgres(config common.Config, ctx context.Context) {
-	err := db.InitPostgres(config)
+func initPostgres(config common.Config, ctx context.Context) *db.PostgresClient {
+	postgres, err := db.InitPostgres(config)
 	if err != nil {
 		utils.Error.Panicln("Failed initializing Postgres", err)
 	}
-	err = runWithTimeout(db.Postgres.Ping, ctx)
+	err = runWithTimeout(postgres.Ping, ctx)
 	if err != nil {
 		utils.Error.Panicln("Failed pinging Postgres", err)
 	}
 	utils.Info.Println("Postgres initialized")
+
+	return postgres
 }
 
-func initRedis(config common.Config, ctx context.Context) {
-	err := db.InitRedis(config)
+func initRedis(config common.Config, ctx context.Context) *db.RedisClient {
+	redis, err := db.InitRedis(config)
 	if err != nil {
 		utils.Error.Panicln("Failed initializing Redis", err)
 	}
 
-	err = db.Redis.Ping(ctx).Err()
+	err = redis.Ping(ctx).Err()
 	if err != nil {
 		utils.Error.Panicln("Failed pinging Redis", err)
 	}
 	utils.Info.Println("Redis initialized")
+
+	return redis
 }
 
-func initClickhouse(config common.Config, ctx context.Context) {
-	err := db.InitClickhouse(config)
+func initClickhouse(config common.Config, ctx context.Context) *db.ClickhouseClient {
+	ch, err := db.InitClickhouse(config)
 	if err != nil {
 		utils.Error.Panicln("Failed initializing Clickhouse", err)
 	}
 
-	err = runWithTimeout(db.Clickhouse.Ping, ctx)
+	err = runWithTimeout(ch.Ping, ctx)
 	if err != nil {
 		utils.Error.Panicln("Failed pinging Clickhouse", err)
 	}
 	utils.Info.Println("Clickhouse initialized")
+
+	return ch
 }
 
 func initNats(ctx context.Context) *utils.NatsClient {

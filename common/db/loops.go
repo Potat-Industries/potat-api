@@ -18,92 +18,85 @@ import (
 	"potat-api/common/utils"
 )
 
-var (
-	maxFiles   = 10
-	dumpPath   = "./dump"
-	dbName     = ""
-	dbUser     = ""
-	dbHost     = ""
-	pgPassword = ""
-)
+const DUMP_PATH = "./dump"
 
-func StartLoops(config common.Config, natsClient *utils.NatsClient) {
-	dbName = config.Postgres.Database
-	dbUser = config.Postgres.User
-	dbHost = config.Postgres.Host
-	pgPassword = config.Postgres.Password
-
+// StartLoops initializes schedules and loops for various tasks.
+func StartLoops(
+	ctx context.Context,
+	config common.Config,
+	natsClient *utils.NatsClient,
+	postgres *PostgresClient,
+	clickhouse *ClickhouseClient,
+	redis *RedisClient,
+) {
 	c := cron.New()
 
 	var err error
-	_, err = c.AddFunc("@hourly", updateHourlyUsage)
+	_, err = c.AddFunc("@hourly", func() {
+		go updateHourlyUsage(ctx, postgres)
+		go validateTokens(ctx, postgres)
+	})
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateHourlyUsage", err)
 
 		return
 	}
-	_, err = c.AddFunc("@daily", updateDailyUsage)
+	_, err = c.AddFunc("@daily", func() {
+		updateDailyUsage(ctx, postgres)
+	})
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateDailyUsage", err)
 
 		return
 	}
-	_, err = c.AddFunc("@weekly", updateWeeklyUsage)
+	_, err = c.AddFunc("@weekly", func() {
+		updateWeeklyUsage(ctx, postgres)
+	})
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateWeeklyUsage", err)
 
 		return
 	}
-	_, err = c.AddFunc("@hourly", validateTokens)
-	if err != nil {
-		utils.Error.Println("Failed initializing cron validateTokens", err)
-
-		return
-	}
-	_, err = c.AddFunc("0 */2 * * *", refreshAllHelixTokens)
+	_, err = c.AddFunc("0 */2 * * *", func() {
+		refreshAllHelixTokens(ctx, postgres)
+	})
 	if err != nil {
 		utils.Error.Println("Failed initializing cron refreshAllHelixTokens", err)
 
 		return
 	}
-	_, err = c.AddFunc("*/5 * * * *", updateColorView)
+	_, err = c.AddFunc("*/5 * * * *", func() {
+		go updateColorView(ctx, clickhouse)
+		go updateBadgeView(ctx, clickhouse)
+	})
 	if err != nil {
 		utils.Error.Println("Failed initializing cron updateColorView", err)
 
 		return
 	}
-	_, err = c.AddFunc("*/5 * * * *", updateBadgeView)
-	if err != nil {
-		utils.Error.Println("Failed initializing cron updateBadgeView", err)
-
-		return
-	}
-	_, err = c.AddFunc("0 */12 * * *", backupPostgres(natsClient))
+	_, err = c.AddFunc("0 */12 * * *", func() {
+		go backupPostgres(ctx, postgres, natsClient, config)
+		go optimizeClickhouse(ctx, clickhouse)
+	})
 	if err != nil {
 		utils.Error.Println("Failed initializing cron backupPostgres", err)
-
-		return
-	}
-	_, err = c.AddFunc("0 */12 * * *", optimizeClickhouse)
-	if err != nil {
-		utils.Error.Println("Failed initializing cron optimizeClickhouse", err)
 
 		return
 	}
 
 	c.Start()
 
-	go decrementDuels()
-	go deleteOldUploads()
-	go updateAggregateTable()
+	go decrementDuels(ctx, redis)
+	go deleteOldUploads(ctx, postgres)
+	go updateAggregateTable(ctx, postgres)
 }
 
-func decrementDuels() {
+func decrementDuels(ctx context.Context, redis *RedisClient) {
 	for {
 		time.Sleep(30 * time.Minute)
 		utils.Info.Println("Decrementing duels")
 
-		keys, err := Scan(context.Background(), "duelUse:*", 100, 0)
+		keys, err := redis.Scan(context.Background(), "duelUse:*", 100, 0)
 		if err != nil {
 			utils.Error.Println("Failed scanning keys for duels", err)
 
@@ -127,7 +120,7 @@ func decrementDuels() {
 			return decrementedKeys
 		`
 
-		value, err := Redis.Eval(context.Background(), luaScript, keys).Result()
+		value, err := redis.Eval(context.Background(), luaScript, keys).Result()
 		if err != nil {
 			utils.Error.Println("Failed decrementing duels", err)
 		}
@@ -136,7 +129,7 @@ func decrementDuels() {
 	}
 }
 
-func deleteOldUploads() {
+func deleteOldUploads(ctx context.Context, postgres *PostgresClient) {
 	for {
 		time.Sleep(24 * time.Hour)
 		utils.Info.Println("Deleting old uploads")
@@ -147,7 +140,7 @@ func deleteOldUploads() {
 			OR (expires_at IS NOT NULL AND expires_at < NOW());
 		`
 
-		_, err := Postgres.Pool.Exec(context.Background(), query)
+		_, err := postgres.Exec(context.Background(), query)
 		if err != nil {
 			utils.Error.Println("Error deleting old uploads ", err)
 		}
@@ -156,7 +149,7 @@ func deleteOldUploads() {
 	}
 }
 
-func updateAggregateTable() {
+func updateAggregateTable(ctx context.Context, postgres *PostgresClient) {
 	for {
 		time.Sleep(5 * time.Minute)
 
@@ -169,7 +162,7 @@ func updateAggregateTable() {
 			SET channel_usage = EXCLUDED.channel_usage;
 		`
 
-		_, err := Postgres.Pool.Exec(context.Background(), query)
+		_, err := postgres.Exec(context.Background(), query)
 		if err != nil {
 			utils.Error.Println("Error updating aggregate table", err)
 		}
@@ -178,11 +171,11 @@ func updateAggregateTable() {
 	}
 }
 
-func updateHourlyUsage() {
+func updateHourlyUsage(ctx context.Context, postgres *PostgresClient) {
 	utils.Info.Println("Updating hourly usage")
 	query := `UPDATE gpt_usage SET hourly_usage = 0;`
 
-	_, err := Postgres.Pool.Exec(context.Background(), query)
+	_, err := postgres.Exec(context.Background(), query)
 	if err != nil {
 		utils.Error.Println("Error updating hourly usage", err)
 	}
@@ -190,11 +183,11 @@ func updateHourlyUsage() {
 	utils.Info.Println("Updated hourly usage")
 }
 
-func updateDailyUsage() {
+func updateDailyUsage(ctx context.Context, postgres *PostgresClient) {
 	utils.Info.Println("Updating daily usage")
 	query := `UPDATE gpt_usage SET daily_usage = 0`
 
-	_, err := Postgres.Pool.Exec(context.Background(), query)
+	_, err := postgres.Exec(context.Background(), query)
 	if err != nil {
 		utils.Error.Println("Error updating daily usage", err)
 	}
@@ -202,11 +195,11 @@ func updateDailyUsage() {
 	utils.Info.Println("Updated daily usage")
 }
 
-func updateWeeklyUsage() {
+func updateWeeklyUsage(ctx context.Context, postgres *PostgresClient) {
 	utils.Info.Println("Updating weekly usage")
 	query := `UPDATE gpt_usage SET weekly_usage = 0`
 
-	_, err := Postgres.Pool.Exec(context.Background(), query)
+	_, err := postgres.Exec(ctx, query)
 	if err != nil {
 		utils.Error.Println("Error updating weekly usage", err)
 	}
@@ -214,7 +207,7 @@ func updateWeeklyUsage() {
 	utils.Info.Println("Updated weekly usage")
 }
 
-func updateColorView() {
+func updateColorView(ctx context.Context, clickhouse *ClickhouseClient) {
 	utils.Info.Println("Updating color view")
 
 	query := `
@@ -231,13 +224,13 @@ func updateColorView() {
 		GROUP BY color;
 	`
 
-	err := Clickhouse.Exec(context.Background(), query)
+	err := clickhouse.Exec(ctx, query)
 	if err != nil {
 		utils.Error.Println("Error updating color view ", err)
 	}
 }
 
-func updateBadgeView() {
+func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
 	utils.Info.Println("Updating badge view")
 
 	query := `
@@ -254,13 +247,15 @@ func updateBadgeView() {
 		GROUP BY badge;
 	`
 
-	err := Clickhouse.Exec(context.Background(), query)
+	err := clickhouse.Exec(ctx, query)
 	if err != nil {
 		utils.Error.Println("Error updating badge view ", err)
 	}
 }
 
 func upsertOAuthToken(
+	ctx context.Context,
+	postgres *PostgresClient,
 	oauth *common.GenericOAUTHResponse,
 	con common.PlatformOauth,
 ) error {
@@ -285,7 +280,7 @@ func upsertOAuthToken(
 			added_at = EXCLUDED.added_at;
 	`
 
-	_, err := Postgres.Pool.Exec(
+	_, err := postgres.Exec(
 		context.Background(),
 		query,
 		con.PlatformID,
@@ -300,7 +295,7 @@ func upsertOAuthToken(
 	return err
 }
 
-func refreshOrDelete(con common.PlatformOauth) (bool, error) {
+func refreshOrDelete(ctx context.Context, postgres *PostgresClient, con common.PlatformOauth) (bool, error) {
 	var err error
 	if con.RefreshToken == "" {
 		return false, errors.New("missing refresh token")
@@ -311,7 +306,7 @@ func refreshOrDelete(con common.PlatformOauth) (bool, error) {
 		return false, err
 	}
 
-	err = upsertOAuthToken(refreshResult, con)
+	err = upsertOAuthToken(ctx, postgres, refreshResult, con)
 	if err != nil {
 		utils.Error.Println(
 			"Error updating token for user_id", con.PlatformID, ":", err,
@@ -323,7 +318,7 @@ func refreshOrDelete(con common.PlatformOauth) (bool, error) {
 	return true, nil
 }
 
-func validateTokens() {
+func validateTokens(ctx context.Context, postgres *PostgresClient) {
 	utils.Info.Println("Validating Twitch tokens ")
 
 	query := `
@@ -335,7 +330,7 @@ func validateTokens() {
 		WHERE platform = 'TWITCH';
 	`
 
-	rows, err := Postgres.Pool.Query(context.Background(), query)
+	rows, err := postgres.Query(ctx, query)
 	if err != nil {
 		utils.Error.Println("Error getting tokens ", err)
 
@@ -362,7 +357,7 @@ func validateTokens() {
 		}
 
 		if !valid {
-			ok, err := refreshOrDelete(con)
+			ok, err := refreshOrDelete(ctx, postgres, con)
 			if err != nil {
 				utils.Error.Println("Error refreshing token ", err)
 				deleted++
@@ -391,7 +386,7 @@ func validateTokens() {
 	)
 }
 
-func refreshAllHelixTokens() {
+func refreshAllHelixTokens(ctx context.Context, postgres *PostgresClient) {
 	utils.Info.Println("Refreshing all Twitch tokens")
 
 	query := `
@@ -407,7 +402,7 @@ func refreshAllHelixTokens() {
 		WHERE platform = 'TWITCH';
 	`
 
-	rows, err := Postgres.Pool.Query(context.Background(), query)
+	rows, err := postgres.Query(ctx, query)
 	if err != nil {
 		utils.Error.Println("Error getting tokens ", err)
 
@@ -434,7 +429,7 @@ func refreshAllHelixTokens() {
 			continue
 		}
 
-		ok, err := refreshOrDelete(con)
+		ok, err := refreshOrDelete(ctx, postgres, con)
 		if err != nil {
 			utils.Error.Println("Error refreshing token ", err)
 			failed++
@@ -462,12 +457,12 @@ func refreshAllHelixTokens() {
 
 func sortFiles(files []string) func(i, j int) bool {
 	return func(i, j int) bool {
-		fileI, errI := os.Stat(filepath.Join(dumpPath, files[i]))
+		fileI, errI := os.Stat(filepath.Join(DUMP_PATH, files[i]))
 		if errI != nil {
 			return false
 		}
 
-		fileJ, errJ := os.Stat(filepath.Join(dumpPath, files[j]))
+		fileJ, errJ := os.Stat(filepath.Join(DUMP_PATH, files[j]))
 		if errJ != nil {
 			return true
 		}
@@ -495,40 +490,42 @@ func deleteOldDumps(files []string, max int) {
 	utils.Info.Printf("Deleted %d old dump files", len(filesToDelete))
 }
 
-func backupPostgres(natsClient *utils.NatsClient) func() {
-	return func() {
-		backupPostgresWithPublisher(natsClient)
-	}
-}
-
-func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
+func backupPostgres(
+	ctx context.Context,
+	postgres *PostgresClient,
+	natsClient *utils.NatsClient,
+	config common.Config,
+) {
 	utils.Debug.Println("Backing up Postgres")
 
-	if err := os.MkdirAll(dumpPath, os.ModePerm); err != nil {
+	if err := os.MkdirAll(DUMP_PATH, os.ModePerm); err != nil {
 		utils.Error.Println("Failed to create backup folder:", err)
 
 		return
 	}
 
-	files, err := filepath.Glob(filepath.Join(dumpPath, "*.sql.zst"))
+	files, err := filepath.Glob(filepath.Join(DUMP_PATH, "*.sql.zst"))
 	if err != nil {
 		utils.Error.Println("Failed to list dump files:", err)
 
 		return
 	}
 
-	deleteOldDumps(files, maxFiles)
-
-	numThreads := runtime.NumCPU()
+	deleteOldDumps(files, 10)
 
 	filePath := filepath.Join(
-		dumpPath,
+		DUMP_PATH,
 		fmt.Sprintf("data_%d.sql.zst", time.Now().Unix()),
 	)
 
 	cmd := exec.Command("sh", "-c", fmt.Sprintf(
 		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | zstd -3 --threads=%d > %s",
-		pgPassword, dbName, dbUser, dbHost, numThreads, filePath,
+		config.Postgres.Password,
+		config.Postgres.Database,
+		config.Postgres.User,
+		config.Postgres.Host,
+		runtime.NumCPU(),
+		filePath,
 	))
 
 	defer func() {
@@ -561,7 +558,7 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 
 	backupSize := float64(stat.Size()) / (1024 * 1024 * 1024)
 
-	dbSize, err := getDatabaseSize(dbName)
+	dbSize, err := getDatabaseSize(ctx, postgres, config.Postgres.Database)
 	if err != nil {
 		utils.Error.Println("Failed to get database size:", err)
 
@@ -583,7 +580,7 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 		return
 	}
 
-	err = natsClient.Publish("postgres-backup:%s", jsonMessage)
+	err = natsClient.Publish("potat-api.postgres-backup", jsonMessage)
 	if err != nil {
 		utils.Error.Println("Failed to publish to queue:", err)
 
@@ -593,9 +590,9 @@ func backupPostgresWithPublisher(natsClient *utils.NatsClient) {
 	utils.Info.Println(message)
 }
 
-func getDatabaseSize(dbName string) (string, error) {
+func getDatabaseSize(ctx context.Context, postgres *PostgresClient, dbName string) (string, error) {
 	query := `SELECT pg_size_pretty(pg_database_size($1)) AS size`
-	rows, err := Postgres.Pool.Query(context.Background(), query, dbName)
+	rows, err := postgres.Query(ctx, query, dbName)
 	if err != nil {
 		return "", err
 	}
@@ -614,7 +611,7 @@ func getDatabaseSize(dbName string) (string, error) {
 	return "", fmt.Errorf("no rows returned for database size query")
 }
 
-func optimizeClickhouse() {
+func optimizeClickhouse(ctx context.Context, clickhouse *ClickhouseClient) {
 	// offset any concurrent crons
 	time.Sleep(5 * time.Minute)
 
@@ -629,7 +626,7 @@ func optimizeClickhouse() {
 
 	query := `SELECT table FROM system.tables WHERE database = ?`
 
-	rows, err := Clickhouse.Query(context.Background(), query, config.Clickhouse.Database)
+	rows, err := clickhouse.Query(ctx, query, config.Clickhouse.Database)
 	if err != nil {
 		utils.Error.Println("Failed to query Clickhouse tables:", err)
 
@@ -645,7 +642,7 @@ func optimizeClickhouse() {
 		}
 
 		query := fmt.Sprintf("OPTIMIZE TABLE %s.%s FINAL", config.Clickhouse.Database, table)
-		if err := Clickhouse.Exec(context.Background(), query); err != nil {
+		if err := clickhouse.Exec(ctx, query); err != nil {
 			utils.Error.Println("Failed to optimize Clickhouse table:", err)
 		}
 

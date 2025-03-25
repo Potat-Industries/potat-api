@@ -23,20 +23,25 @@ const createTable = `
 `
 
 type redirects struct {
-	server *http.Server
+	server   *http.Server
+	postgres *db.PostgresClient
+	redis    *db.RedisClient
 }
 
 // StartServing will start the redirects server on the configured port.
-func StartServing(config common.Config) error {
+func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
 	if config.Redirects.Host == "" || config.Redirects.Port == "" {
 		utils.Error.Fatal("Config: Redirect host and port must be set")
 	}
 
-	redirector := redirects{}
+	redirector := redirects{
+		postgres: postgres,
+		redis:    redis,
+	}
 
 	router := mux.NewRouter()
 
-	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute, redis)
 	router.Use(middleware.LogRequest)
 	router.Use(limiter)
 	router.HandleFunc("/{id}", redirector.getRedirect).Methods(http.MethodGet)
@@ -49,7 +54,7 @@ func StartServing(config common.Config) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	db.Postgres.CheckTableExists(createTable)
+	redirector.postgres.CheckTableExists(createTable)
 
 	utils.Info.Printf("Redirects listening on %s", redirector.server.Addr)
 
@@ -57,14 +62,14 @@ func StartServing(config common.Config) error {
 }
 
 func (r *redirects) setRedis(ctx context.Context, key, data string) {
-	err := db.Redis.SetEx(ctx, key, data, time.Hour).Err()
+	err := r.redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
 		utils.Error.Printf("Error caching redirect: %v", err)
 	}
 }
 
 func (r *redirects) getRedis(ctx context.Context, key string) (string, error) {
-	data, err := db.Redis.Get(ctx, key).Result()
+	data, err := r.redis.Get(ctx, key).Result()
 	if err != nil && !errors.Is(err, db.RedisErrNil) {
 		return "", err
 	}
@@ -90,7 +95,7 @@ func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Reques
 	}
 	writer.Header().Set("X-Cache-Hit", "MISS")
 
-	redirect, err := db.Postgres.GetRedirectByKey(request.Context(), key)
+	redirect, err := r.postgres.GetRedirectByKey(request.Context(), key)
 	if err != nil {
 		if errors.Is(err, db.PostgresNoRows) {
 			http.NotFound(writer, request)

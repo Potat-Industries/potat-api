@@ -35,6 +35,8 @@ type uploader struct {
 	server        *http.Server
 	router        *mux.Router
 	hasher        func(string) string
+	postgres      *db.PostgresClient
+	redis         *db.RedisClient
 	cacheDuration time.Duration
 	keyLength     int
 }
@@ -55,7 +57,7 @@ func getHashGenerator(secret string) func(key string) string {
 }
 
 // StartServing will start the uploader server on the configured port.
-func StartServing(config common.Config) error {
+func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
 	if config.Uploader.Host == "" || config.Uploader.Port == "" {
 		utils.Error.Fatal("Config: Uploader host and port must be set")
 	}
@@ -64,16 +66,18 @@ func StartServing(config common.Config) error {
 		keyLength:     6,
 		cacheDuration: 30 * time.Minute,
 		hasher:        getHashGenerator(config.Uploader.AuthKey),
+		postgres:      postgres,
+		redis:         redis,
 	}
 
 	router := mux.NewRouter()
 
 	router.Use(middleware.LogRequest)
-	router.Use(middleware.NewRateLimiter(200, 1*time.Minute))
+	router.Use(middleware.NewRateLimiter(200, 1*time.Minute, redis))
 	router.HandleFunc("/{key}", uploader.handleGet).Methods(http.MethodGet)
 
 	deleteRouter := router.PathPrefix("/delete").Subrouter()
-	deleteRouter.Use(middleware.NewRateLimiter(15, 1*time.Minute))
+	deleteRouter.Use(middleware.NewRateLimiter(15, 1*time.Minute, redis))
 	deleteRouter.HandleFunc("/{key}/{hash}", uploader.handleDelete).Methods(http.MethodGet)
 
 	authedRoute := router.PathPrefix("/").Subrouter()
@@ -81,7 +85,7 @@ func StartServing(config common.Config) error {
 
 	authenicator := middleware.NewAuthenticator(config.Uploader.AuthKey, nil)
 	authedRoute.Use(authenicator.SetStaticAuthMiddleware())
-	authedRoute.Use(middleware.NewRateLimiter(25, 1*time.Minute))
+	authedRoute.Use(middleware.NewRateLimiter(25, 1*time.Minute, redis))
 
 	uploader.server = &http.Server{
 		Handler:      router,
@@ -96,7 +100,7 @@ func StartServing(config common.Config) error {
 		uploader.keyLength = config.Haste.KeyLength
 	}
 
-	db.Postgres.CheckTableExists(createTable)
+	uploader.postgres.CheckTableExists(createTable)
 
 	utils.Info.Printf("Uploader listening on %s", uploader.server.Addr)
 
@@ -104,7 +108,7 @@ func StartServing(config common.Config) error {
 }
 
 func (u *uploader) setRedis(ctx context.Context, key string, data []byte) {
-	err := db.Redis.SetEx(ctx, key, data, u.cacheDuration).Err()
+	err := u.redis.SetEx(ctx, key, data, u.cacheDuration).Err()
 	if err != nil {
 		utils.Warn.Printf("Failed to cache document: %v", err)
 	}
@@ -151,7 +155,7 @@ func (u *uploader) handleUpload(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	ok, createdAt := db.Postgres.NewUpload(
+	ok, createdAt := u.postgres.NewUpload(
 		request.Context(),
 		key,
 		fileData,
@@ -186,9 +190,9 @@ func (u *uploader) handleDelete(writer http.ResponseWriter, request *http.Reques
 	key := vars["key"]
 	hash := vars["hash"]
 
-	db.Redis.Del(request.Context(), key)
+	u.redis.Del(request.Context(), key)
 
-	createdAt, err := db.Postgres.GetUploadCreatedAt(request.Context(), key)
+	createdAt, err := u.postgres.GetUploadCreatedAt(request.Context(), key)
 	if err != nil {
 		http.Error(writer, "Not Found", http.StatusNotFound)
 
@@ -201,7 +205,7 @@ func (u *uploader) handleDelete(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	ok := db.Postgres.DeleteFileByKey(request.Context(), key)
+	ok := u.postgres.DeleteFileByKey(request.Context(), key)
 	if !ok {
 		http.Error(writer, "Not Found", http.StatusNotFound)
 
@@ -215,7 +219,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 	vars := mux.Vars(request)
 	key := vars["key"]
 
-	cache, err := db.Redis.Get(request.Context(), key).Bytes()
+	cache, err := u.redis.Get(request.Context(), key).Bytes()
 	if cache != nil && err == nil {
 		contentType := http.DetectContentType(cache)
 		writer.Header().Set("Content-Type", contentType)
@@ -229,7 +233,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 
-	data, mimeType, name, _, err := db.Postgres.GetFileByKey(request.Context(), key)
+	data, mimeType, name, _, err := u.postgres.GetFileByKey(request.Context(), key)
 	if errors.Is(err, db.PostgresNoRows) {
 		http.Error(writer, "Not Found", http.StatusNotFound)
 

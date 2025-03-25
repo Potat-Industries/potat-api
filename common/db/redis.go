@@ -12,12 +12,9 @@ type RedisClient struct {
 	*redis.Client
 }
 
-var (
-	Redis       *redis.Client
-	RedisErrNil = redis.Nil
-)
+var RedisErrNil = redis.Nil
 
-func InitRedis(config common.Config) error {
+func InitRedis(config common.Config) (*RedisClient, error) {
 	host := config.Redis.Host
 	if host == "" {
 		host = "localhost"
@@ -34,12 +31,10 @@ func InitRedis(config common.Config) error {
 		DB:       0,
 	}
 
-	Redis = redis.NewClient(options)
-
-	return nil
+	return &RedisClient{redis.NewClient(options)}, nil
 }
 
-func Scan(
+func (r *RedisClient) Scan(
 	ctx context.Context,
 	match string,
 	count int64,
@@ -48,7 +43,7 @@ func Scan(
 	matches := make([]string, 0)
 
 	for cursor != 0 {
-		keys, next, err := Redis.Scan(ctx, cursor, match, count).Result()
+		keys, next, err := r.Client.Scan(ctx, cursor, match, count).Result()
 		if err != nil {
 			utils.Error.Println("Failed scanning keys", err)
 

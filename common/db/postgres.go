@@ -14,8 +14,8 @@ import (
 	"potat-api/common/utils"
 )
 
-type DB struct {
-	Pool *pgxpool.Pool
+type PostgresClient struct {
+	*pgxpool.Pool
 }
 
 type LoaderKey struct {
@@ -25,25 +25,20 @@ type LoaderKey struct {
 	Platform *string
 }
 
-var (
-	Postgres       *DB
-	PostgresNoRows = pgx.ErrNoRows
-)
+var PostgresNoRows = pgx.ErrNoRows
 
-func InitPostgres(config common.Config) error {
+func InitPostgres(config common.Config) (*PostgresClient, error) {
 	dbConfig, err := loadConfig(config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	Postgres = &DB{Pool: pool}
-
-	return nil
+	return &PostgresClient{pool}, nil
 }
 
 func loadConfig(config common.Config) (*pgxpool.Config, error) {
@@ -91,18 +86,18 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) {
 	return dbConfig, nil
 }
 
-func (db *DB) CheckTableExists(createTable string) {
+func (db *PostgresClient) CheckTableExists(createTable string) {
 	_, err := db.Pool.Exec(context.Background(), createTable)
 	if err != nil {
 		utils.Error.Fatalf("Failed to create table: %v", err)
 	}
 }
 
-func (db *DB) Ping(ctx context.Context) error {
+func (db *PostgresClient) Ping(ctx context.Context) error {
 	return db.Pool.Ping(ctx)
 }
 
-func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User, error) {
+func (db *PostgresClient) GetUserByName(ctx context.Context, username string) (*common.User, error) {
 	query := `
 		SELECT
 				users.user_id,
@@ -114,8 +109,7 @@ func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User,
 				json_agg(uc) AS connections
 		FROM users
 		LEFT JOIN user_connections uc ON users.user_id = uc.user_id
-		WHERE uc.platform_username = $1
-		  AND uc.platform = 'TWITCH'
+		WHERE users.username = $1
 		GROUP BY users.user_id;
 	`
 
@@ -136,7 +130,7 @@ func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User,
 	return &user, nil
 }
 
-func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*common.User, error) {
+func (db *PostgresClient) GetUserByInternalID(ctx context.Context, id int) (*common.User, error) {
 	query := `
 		SELECT
 			u.user_id,
@@ -169,7 +163,7 @@ func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*common.User, er
 	return &user, nil
 }
 
-func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {
+func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {
 	query := `
 		SELECT
 		  user_id
@@ -208,7 +202,7 @@ func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) *[]common.
 	return &blocks
 }
 
-func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]common.ChannelCommand {
+func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID string) *[]common.ChannelCommand {
 	query := `
 		SELECT
 			command_id,
@@ -281,7 +275,7 @@ func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]commo
 	return &commands
 }
 
-func (db *DB) GetChannelByID(
+func (db *PostgresClient) GetChannelByID(
 	ctx context.Context,
 	channelID string,
 	platform common.Platforms,
@@ -370,7 +364,7 @@ func (db *DB) GetChannelByID(
 	return &channel, nil
 }
 
-func (db *DB) GetChannelByName(
+func (db *PostgresClient) GetChannelByName(
 	ctx context.Context,
 	username string,
 	platform common.Platforms,
@@ -459,7 +453,7 @@ func (db *DB) GetChannelByName(
 	return &channel, nil
 }
 
-func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.PotatoData, error) {
+func (db *PostgresClient) GetPotatoData(ctx context.Context, username string) (*common.PotatoData, error) {
 	query := `
 		SELECT
 			p.user_id,
@@ -547,7 +541,7 @@ func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.Potat
 	return &data, nil
 }
 
-func (db *DB) BatchUserConections(
+func (db *PostgresClient) BatchUserConections(
 	ctx context.Context,
 	IDs []int,
 ) *map[int][]common.UserConnection {
@@ -593,11 +587,11 @@ func (db *DB) BatchUserConections(
 	return &users
 }
 
-func (db *DB) GetRedirectByKey(ctx context.Context, key string) (string, error) {
+func (db *PostgresClient) GetRedirectByKey(ctx context.Context, key string) (string, error) {
 	query := `SELECT url FROM url_redirects WHERE key = $1`
 
 	var url string
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&url)
+	err := db.Pool.QueryRow(ctx, query, key).Scan(&url)
 	if err != nil {
 		return "", err
 	}
@@ -605,11 +599,11 @@ func (db *DB) GetRedirectByKey(ctx context.Context, key string) (string, error) 
 	return url, nil
 }
 
-func (db *DB) GetKeyByRedirect(ctx context.Context, url string) (string, error) {
+func (db *PostgresClient) GetKeyByRedirect(ctx context.Context, url string) (string, error) {
 	query := `SELECT key FROM url_redirects WHERE url = $1`
 
 	var key string
-	err := Postgres.Pool.QueryRow(ctx, query, url).Scan(&key)
+	err := db.Pool.QueryRow(ctx, query, url).Scan(&key)
 	if err != nil {
 		return "", err
 	}
@@ -617,12 +611,12 @@ func (db *DB) GetKeyByRedirect(ctx context.Context, url string) (string, error) 
 	return key, nil
 }
 
-func (db *DB) RedirectExists(ctx context.Context, key string) bool {
+func (db *PostgresClient) RedirectExists(ctx context.Context, key string) bool {
 	query := `SELECT EXISTS(SELECT 1 FROM url_redirects WHERE key = $1)`
 
 	var exists bool
 
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&exists)
+	err := db.Pool.QueryRow(ctx, query, key).Scan(&exists)
 	if err != nil {
 		return false
 	}
@@ -630,15 +624,15 @@ func (db *DB) RedirectExists(ctx context.Context, key string) bool {
 	return exists
 }
 
-func (db *DB) NewRedirect(ctx context.Context, key, url string) error {
+func (db *PostgresClient) NewRedirect(ctx context.Context, key, url string) error {
 	query := `INSERT INTO url_redirects (key, url) VALUES ($1, $2)`
 
-	_, err := Postgres.Pool.Exec(ctx, query, key, url)
+	_, err := db.Pool.Exec(ctx, query, key, url)
 
 	return err
 }
 
-func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
+func (db *PostgresClient) GetHaste(ctx context.Context, key string) (string, error) {
 	query := `
 		UPDATE haste
 		SET access_count = access_count + 1
@@ -648,7 +642,7 @@ func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
 
 	var text string
 
-	err := Postgres.Pool.QueryRow(ctx, query, encode(key)).Scan(&text)
+	err := db.Pool.QueryRow(ctx, query, encode(key)).Scan(&text)
 	if err != nil {
 		return "", err
 	}
@@ -656,7 +650,7 @@ func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
 	return text, nil
 }
 
-func (db *DB) NewHaste(
+func (db *PostgresClient) NewHaste(
 	ctx context.Context,
 	key string,
 	text []byte,
@@ -668,7 +662,7 @@ func (db *DB) NewHaste(
 		ON CONFLICT (key) DO NOTHING;
 	`
 
-	_, err := Postgres.Pool.Exec(ctx, query, encode(key), text, source)
+	_, err := db.Pool.Exec(ctx, query, encode(key), text, source)
 
 	return err
 }
@@ -680,7 +674,7 @@ func encode(data string) string {
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
-func (db *DB) NewUpload(
+func (db *PostgresClient) NewUpload(
 	ctx context.Context,
 	key string,
 	file []byte,
@@ -693,7 +687,7 @@ func (db *DB) NewUpload(
 		RETURNING created_at;
 	`
 	var createdAt time.Time
-	err := Postgres.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
+	err := db.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
 	if err != nil {
 		utils.Error.Println("Error scanning upload", err)
 
@@ -703,7 +697,7 @@ func (db *DB) NewUpload(
 	return true, &createdAt
 }
 
-func (db *DB) GetFileByKey(
+func (db *PostgresClient) GetFileByKey(
 	ctx context.Context,
 	key string,
 ) ([]byte, string, *string, *time.Time, error) {
@@ -718,7 +712,7 @@ func (db *DB) GetFileByKey(
 	var fileName *string
 	var createdAt time.Time
 
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(
+	err := db.Pool.QueryRow(ctx, query, key).Scan(
 		&content,
 		&mimeType,
 		&fileName,
@@ -731,7 +725,7 @@ func (db *DB) GetFileByKey(
 	return content, mimeType, fileName, &createdAt, nil
 }
 
-func (db *DB) DeleteFileByKey(
+func (db *PostgresClient) DeleteFileByKey(
 	ctx context.Context,
 	key string,
 ) bool {
@@ -740,12 +734,12 @@ func (db *DB) DeleteFileByKey(
 		WHERE key = $1
 	`
 
-	_, err := Postgres.Pool.Exec(ctx, query, key)
+	_, err := db.Pool.Exec(ctx, query, key)
 
 	return err == nil
 }
 
-func (db *DB) GetUploadCreatedAt(
+func (db *PostgresClient) GetUploadCreatedAt(
 	ctx context.Context,
 	key string,
 ) (*time.Time, error) {
@@ -756,7 +750,7 @@ func (db *DB) GetUploadCreatedAt(
 	`
 
 	var createdAt time.Time
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&createdAt)
+	err := db.Pool.QueryRow(ctx, query, key).Scan(&createdAt)
 	if err != nil {
 		return nil, err
 	}

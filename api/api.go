@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"potat-api/api/middleware"
 	"potat-api/common"
+	"potat-api/common/db"
 	"potat-api/common/utils"
 )
 
@@ -33,10 +34,15 @@ type register struct {
 	mu     sync.Mutex
 }
 
-var registry = &register{} //nolint:gochecknoglobals // We use mutex
+var registry = &register{} //nolint:gochecknoglobals // Used to conveniently register API routes.
 
 // StartServing initializes and starts the API server with the configured routes and middleware.
-func StartServing(config common.Config) error {
+func StartServing(
+	config common.Config,
+	postgres *db.PostgresClient,
+	redis *db.RedisClient,
+	clickhouse *db.ClickhouseClient,
+) error {
 	if config.API.Host == "" || config.API.Port == "" {
 		utils.Error.Fatal("Config: API host and port must be set")
 	}
@@ -44,19 +50,17 @@ func StartServing(config common.Config) error {
 	api := Server{
 		router: mux.NewRouter(),
 	}
+	
+	api.router.Use(middleware.LogRequest)
+	api.router.Use(middleware.InjectDatabases(postgres, redis, clickhouse))
+	api.router.Use(middleware.NewRateLimiter(100, 1*time.Minute, redis))
+	
 	authenticator := middleware.NewAuthenticator(config.Twitch.ClientSecret, GenericResponse)
-
-	router := mux.NewRouter()
-
-	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
-	router.Use(middleware.LogRequest)
-	router.Use(limiter)
-
-	api.authedRouter = router.PathPrefix("/").Subrouter()
+	api.authedRouter = api.router.PathPrefix("/").Subrouter()
 	api.authedRouter.Use(authenticator.SetDynamicAuthMiddleware())
 
 	api.server = &http.Server{
-		Handler:      router,
+		Handler:      api.router,
 		Addr:         config.API.Host + ":" + config.API.Port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
@@ -65,15 +69,20 @@ func StartServing(config common.Config) error {
 
 	utils.Info.Printf("API listening on %s", api.server.Addr)
 
-	// Register all routes
 	for _, route := range registry.routes {
+		utils.Info.Printf("Registering route: %s %s", route.Method, route.Path)
 		api.registerRoute(route)
 	}
+
+	// Catch-all for unmatched routes
+	api.router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		GenericResponse(w, http.StatusNotFound, map[string]string{"error": "Not Found"}, time.Now())
+	})
 
 	return api.server.ListenAndServe()
 }
 
-// SetRoute adds a new route to the registry. This function is thread-safe.
+// SetRoute adds a new route to the registry.
 func SetRoute(route Route) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()

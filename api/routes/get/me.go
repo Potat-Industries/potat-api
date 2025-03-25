@@ -34,7 +34,14 @@ func init() {
 }
 
 func getChannelState(ctx context.Context, channelID string, platform common.Platforms) string {
-	channelData, err := db.Postgres.GetChannelByID(ctx, channelID, platform)
+	postgres, ok := ctx.Value(middleware.PostgresKey).(*db.PostgresClient)
+	if !ok {
+		utils.Error.Println("Postgres client not found in context")
+
+		return "NEVER"
+	}
+
+	channelData, err := postgres.GetChannelByID(ctx, channelID, platform)
 	if err != nil {
 		return "NEVER"
 	}

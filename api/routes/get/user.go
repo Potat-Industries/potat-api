@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"potat-api/api"
+	"potat-api/api/middleware"
 	"potat-api/common"
 	"potat-api/common/db"
 	"potat-api/common/utils"
@@ -182,9 +183,24 @@ func tidyPotatoInfo(
 }
 
 func loadUser(ctx context.Context, user string) UserInfo {
+	postgres, ok := ctx.Value(middleware.PostgresKey).(*db.PostgresClient)
+	if !ok {
+		utils.Error.Println("Postgres client not found in context")
+
+		return UserInfo{}
+	}
+
+	redis, ok := ctx.Value(middleware.RedisKey).(*db.RedisClient)
+	if !ok {
+		utils.Error.Println("Redis client not found in context")
+
+		return UserInfo{}
+	}
+
 	var wg sync.WaitGroup
 
 	wg.Add(9)
+
 	var userData *common.User
 	var channelData *common.Channel
 	var potatData *common.PotatoData
@@ -197,7 +213,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Postgres.GetUserByName(ctx, user)
+
+		data, err := postgres.GetUserByName(ctx, user)
 		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			utils.Warn.Println("Error fetching user data: ", err)
 		} else {
@@ -207,7 +224,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Postgres.GetChannelByName(ctx, user, common.Platforms(common.TWITCH))
+
+		data, err := postgres.GetChannelByName(ctx, user, common.Platforms(common.TWITCH))
 		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			utils.Warn.Println("Error fetching channel data: ", err)
 		} else {
@@ -217,7 +235,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Postgres.GetPotatoData(ctx, user)
+
+		data, err := postgres.GetPotatoData(ctx, user)
 		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			utils.Warn.Println("Error fetching potato data: ", err)
 		} else {
@@ -227,7 +246,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Redis.Get(ctx, fmt.Sprintf("potato:%s", user)).Int()
+
+		data, err := redis.Get(ctx, fmt.Sprintf("potato:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last potato: ", err)
 		} else {
@@ -237,7 +257,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Redis.Get(ctx, fmt.Sprintf("cdr:%s", user)).Int()
+
+		data, err := redis.Get(ctx, fmt.Sprintf("cdr:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last cdr: ", err)
 		} else {
@@ -247,7 +268,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Redis.Get(ctx, fmt.Sprintf("trample:%s", user)).Int()
+
+		data, err := redis.Get(ctx, fmt.Sprintf("trample:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last trample: ", err)
 		} else {
@@ -257,7 +279,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Redis.Get(ctx, fmt.Sprintf("steal:%s", user)).Int()
+
+		data, err := redis.Get(ctx, fmt.Sprintf("steal:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last steal: ", err)
 		} else {
@@ -267,7 +290,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Redis.Get(ctx, fmt.Sprintf("eat:%s", user)).Int()
+
+		data, err := redis.Get(ctx, fmt.Sprintf("eat:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last eat: ", err)
 		} else {
@@ -277,7 +301,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 
 	go func() {
 		defer wg.Done()
-		data, err := db.Redis.Get(ctx, fmt.Sprintf("quiz:%s", user)).Int()
+
+		data, err := redis.Get(ctx, fmt.Sprintf("quiz:%s", user)).Int()
 		if err != nil && !errors.Is(err, db.RedisErrNil) {
 			utils.Warn.Println("Error fetching last quiz: ", err)
 		} else {

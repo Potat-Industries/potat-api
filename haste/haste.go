@@ -33,22 +33,26 @@ const createTable = `
 type hastebin struct {
 	server    *http.Server
 	router    *mux.Router
+	postgres  *db.PostgresClient
+	redis     *db.RedisClient
 	keyLength int
 }
 
 // StartServing will start the Haste server on the configured port.
-func StartServing(config common.Config) error {
+func StartServing(config common.Config, postgres *db.PostgresClient, redis *db.RedisClient) error {
 	if config.Haste.Host == "" || config.Haste.Port == "" {
 		utils.Error.Fatal("Config: Haste host and port must be set")
 	}
 
 	haste := hastebin{
 		keyLength: 6,
+		postgres:  postgres,
+		redis:     redis,
 	}
 
 	router := mux.NewRouter()
 
-	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute, redis)
 	router.Use(middleware.LogRequest)
 	router.Use(limiter)
 
@@ -78,7 +82,7 @@ func StartServing(config common.Config) error {
 		haste.keyLength = config.Haste.KeyLength
 	}
 
-	db.Postgres.CheckTableExists(createTable)
+	haste.postgres.CheckTableExists(createTable)
 
 	utils.Info.Printf("Haste listening on %s", haste.server.Addr)
 
@@ -86,7 +90,7 @@ func StartServing(config common.Config) error {
 }
 
 func (h *hastebin) getRedis(ctx context.Context, key string) (string, error) {
-	data, err := db.Redis.Get(ctx, key).Result()
+	data, err := h.redis.Get(ctx, key).Result()
 	if err != nil {
 		return "", err
 	}
@@ -95,7 +99,7 @@ func (h *hastebin) getRedis(ctx context.Context, key string) (string, error) {
 }
 
 func (h *hastebin) setRedis(ctx context.Context, key, data string) {
-	err := db.Redis.SetEx(ctx, key, data, time.Hour).Err()
+	err := h.redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
 		utils.Warn.Printf("Failed to cache document: %v", err)
 
@@ -155,7 +159,7 @@ func (h *hastebin) handleGet(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 
-	data, err := db.Postgres.GetHaste(request.Context(), key)
+	data, err := h.postgres.GetHaste(request.Context(), key)
 	if err != nil || data == "" {
 		utils.Warn.Printf("Failed to get document: %v", err)
 		http.Error(writer, "Document not found", http.StatusNotFound)
@@ -199,7 +203,7 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	data, err := db.Postgres.GetHaste(request.Context(), key)
+	data, err := h.postgres.GetHaste(request.Context(), key)
 	if err != nil || data == "" {
 		utils.Warn.Printf("Failed to get document: %v", err)
 		http.Error(writer, "Document not found", http.StatusNotFound)
@@ -276,7 +280,7 @@ func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 
-	err = db.Postgres.NewHaste(request.Context(), key, body, request.RemoteAddr)
+	err = h.postgres.NewHaste(request.Context(), key, body, request.RemoteAddr)
 	if err != nil {
 		utils.Warn.Println("Failed to save document: ", err)
 		http.Error(writer, "Internal server error", http.StatusInternalServerError)
@@ -299,7 +303,7 @@ func (h *hastebin) chooseKey(ctx context.Context) (string, error) {
 			return "", err
 		}
 
-		data, err := db.Postgres.GetHaste(ctx, key)
+		data, err := h.postgres.GetHaste(ctx, key)
 		if err != nil && !errors.Is(err, db.PostgresNoRows) {
 			return "", err
 		}
