@@ -1,4 +1,4 @@
-module potat-api
+module github.com/Potat-Industries/potat-api
 
 go 1.23.0
 

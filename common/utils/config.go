@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"os"
 
-	"potat-api/common"
-	"potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
 // LoadConfig loads the configuration from the config.json file.

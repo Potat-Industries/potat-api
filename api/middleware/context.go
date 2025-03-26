@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/db"
 )
 
 // ErrMissingContext is returned when a database client is not found in the request context.

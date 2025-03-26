@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"potat-api/common"
-	"potat-api/common/logger"
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 )
 
 type hub struct {

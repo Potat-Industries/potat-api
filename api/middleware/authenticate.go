@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/golang-jwt/jwt/v5"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/logger"
 )
 
 var (

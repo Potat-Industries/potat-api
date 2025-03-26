@@ -6,8 +6,8 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"potat-api/common"
-	"potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
 // ClickhouseClient is a wrapper around the ClickHouse driver.Conn to provide a custom client.

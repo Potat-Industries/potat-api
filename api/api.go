@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/api/middleware"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 	"github.com/gorilla/mux"
-	"potat-api/api/middleware"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/logger"
-	"potat-api/common/utils"
 )
 
 // Route represents a single API route with its handler, path, method, and authentication requirement.

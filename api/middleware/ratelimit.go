@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"potat-api/common/db"
-	"potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
 var errBadRedisResponse = errors.New("invalid result from Redis")

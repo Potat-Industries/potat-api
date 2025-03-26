@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"potat-api/common"
-	"potat-api/common/logger"
 )
 
 // PostgresClient is a wrapper around the pgxpool.Pool to manage database connections and queries.

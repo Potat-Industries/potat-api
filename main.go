@@ -14,17 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	"potat-api/api"
-	_ "potat-api/api/routes/get"
-	_ "potat-api/api/routes/post"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/logger"
-	"potat-api/common/utils"
-	"potat-api/haste"
-	"potat-api/redirects"
-	"potat-api/socket"
-	"potat-api/uploader"
+	"github.com/Potat-Industries/potat-api/api"
+	_ "github.com/Potat-Industries/potat-api/api/routes/get"
+	_ "github.com/Potat-Industries/potat-api/api/routes/post"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/haste"
+	"github.com/Potat-Industries/potat-api/redirects"
+	"github.com/Potat-Industries/potat-api/socket"
+	"github.com/Potat-Industries/potat-api/uploader"
 )
 
 var errPingTimeout = errors.New("ping timed out")

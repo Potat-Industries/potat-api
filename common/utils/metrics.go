@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"potat-api/common"
-	"potat-api/common/logger"
 )
 
 // Metrics is a struct that holds the Prometheus metrics for the application.

@@ -4,9 +4,9 @@ package db
 import (
 	"context"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/redis/go-redis/v9"
-	"potat-api/common"
-	"potat-api/common/logger"
 )
 
 // RedisClient is a wrapper around the Redis client to provide a custom client.

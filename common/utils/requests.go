@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"potat-api/common"
-	"potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
 var (

@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"time"
 
-	"potat-api/api"
-	"potat-api/api/middleware"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/logger"
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/api"
+	"github.com/Potat-Industries/potat-api/api/middleware"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 )
 
 // HelpResponse is the response type for the /help endpoint.

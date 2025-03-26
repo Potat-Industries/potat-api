@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"potat-api/common/logger"
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 )
 
 type loggingResponseWriter struct {

@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"time"
 
-	"potat-api/api"
-	"potat-api/api/middleware"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/api"
+	"github.com/Potat-Industries/potat-api/api/middleware"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
 // SiteUserData represents the user data returned by the /twitch/me endpoint.

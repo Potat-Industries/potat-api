@@ -14,10 +14,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 	"github.com/robfig/cron/v3"
-	"potat-api/common"
-	"potat-api/common/logger"
-	"potat-api/common/utils"
 )
 
 var (
@@ -595,7 +595,7 @@ func backupPostgres(
 		return
 	}
 
-	err = natsClient.Publish("potat-api.postgres-backup", jsonMessage)
+	err = natsClient.Publish("github.com/Potat-Industries/potat-api.postgres-backup", jsonMessage)
 	if err != nil {
 		logger.Error.Println("Failed to publish to queue:", err)
 

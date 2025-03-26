@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/api"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 	"github.com/google/uuid"
-	"potat-api/api"
-	"potat-api/common"
-	"potat-api/common/logger"
-	"potat-api/common/utils"
 )
 
 //nolint:gosec,lll
