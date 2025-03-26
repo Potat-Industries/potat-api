@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -59,10 +60,10 @@ func main() {
 	var metrics *utils.Metrics
 	metricsChan := make(chan error)
 	if config.Prometheus.Enabled {
+		var server *http.Server
+		metrics, server = utils.ObserveMetrics(*config)
 		go func() {
-			var metricErr error
-			metrics, metricErr = utils.ObserveMetrics(*config)
-			metricsChan <- metricErr
+			metricsChan <- server.ListenAndServe()
 		}()
 	}
 

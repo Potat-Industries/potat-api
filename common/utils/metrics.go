@@ -19,7 +19,7 @@ type Metrics struct {
 }
 
 // ObserveMetrics initializes and starts the Prometheus metrics server.
-func ObserveMetrics(config common.Config) (*Metrics, error) {
+func ObserveMetrics(config common.Config) (*Metrics, *http.Server) {
 	httpRequestCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "http_inbound_requests",
 		Help: "Inbound requests to bot endpoints",
@@ -48,7 +48,12 @@ func ObserveMetrics(config common.Config) (*Metrics, error) {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	return &Metrics{httpRequestCounter, socketGauge}, server.ListenAndServe()
+	metrics := &Metrics{
+		httpRequestCounter: httpRequestCounter,
+		socketGauge: socketGauge,
+	}
+
+	return metrics, server
 }
 
 // ObserveInboundRequests increments the counter for inbound requests to bot endpoints.
