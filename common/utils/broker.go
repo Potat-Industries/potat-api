@@ -61,16 +61,10 @@ func CreateNatsBroker(
 }
 
 func (n *NatsClient) subNatsStream(ctx context.Context) error {
-	sub, err := n.Client.Subscribe("potatbotat.>", n.handleMessage)
+	_, err := n.Client.Subscribe("potatbotat.>", n.handleMessage)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err = sub.Unsubscribe()
-		if err != nil {
-			logger.Warn.Printf("Failed to unsubscribe NATs topic: %v", err)
-		}
-	}()
 
 	err = n.Client.Publish("potat-api.connected", []byte(nil))
 	if err != nil {
