@@ -1,3 +1,4 @@
+// Package db provides database clients and functions to retrieve or update data.
 package db
 
 import (
@@ -19,7 +20,12 @@ import (
 	"potat-api/common/utils"
 )
 
-const DUMP_PATH = "./dump"
+var (
+	errNoRows              = fmt.Errorf("no rows returned for database size query")
+	errMissingRefreshToken = errors.New("missing refresh token")
+)
+
+const dumpPath = "./dump"
 
 // StartLoops initializes schedules and loops for various tasks.
 func StartLoops(
@@ -30,10 +36,13 @@ func StartLoops(
 	clickhouse *ClickhouseClient,
 	redis *RedisClient,
 ) {
-	c := cron.New()
+	if !config.Loops.Enabled {
+		return
+	}
+	cronManager := cron.New()
 
 	var err error
-	_, err = c.AddFunc("@hourly", func() {
+	_, err = cronManager.AddFunc("@hourly", func() {
 		go updateHourlyUsage(ctx, postgres)
 		go validateTokens(ctx, config, postgres)
 	})
@@ -42,7 +51,7 @@ func StartLoops(
 
 		return
 	}
-	_, err = c.AddFunc("@daily", func() {
+	_, err = cronManager.AddFunc("@daily", func() {
 		updateDailyUsage(ctx, postgres)
 	})
 	if err != nil {
@@ -50,7 +59,7 @@ func StartLoops(
 
 		return
 	}
-	_, err = c.AddFunc("@weekly", func() {
+	_, err = cronManager.AddFunc("@weekly", func() {
 		updateWeeklyUsage(ctx, postgres)
 	})
 	if err != nil {
@@ -58,7 +67,7 @@ func StartLoops(
 
 		return
 	}
-	_, err = c.AddFunc("0 */2 * * *", func() {
+	_, err = cronManager.AddFunc("0 */2 * * *", func() {
 		refreshAllHelixTokens(ctx, config, postgres)
 	})
 	if err != nil {
@@ -66,7 +75,7 @@ func StartLoops(
 
 		return
 	}
-	_, err = c.AddFunc("*/5 * * * *", func() {
+	_, err = cronManager.AddFunc("*/5 * * * *", func() {
 		go updateColorView(ctx, clickhouse)
 		go updateBadgeView(ctx, clickhouse)
 	})
@@ -75,7 +84,7 @@ func StartLoops(
 
 		return
 	}
-	_, err = c.AddFunc("0 */12 * * *", func() {
+	_, err = cronManager.AddFunc("0 */12 * * *", func() {
 		go backupPostgres(ctx, postgres, natsClient, config)
 		go optimizeClickhouse(ctx, config, clickhouse)
 	})
@@ -85,7 +94,7 @@ func StartLoops(
 		return
 	}
 
-	c.Start()
+	cronManager.Start()
 
 	go decrementDuels(ctx, redis)
 	go deleteOldUploads(ctx, postgres)
@@ -97,7 +106,7 @@ func decrementDuels(ctx context.Context, redis *RedisClient) {
 		time.Sleep(30 * time.Minute)
 		logger.Info.Println("Decrementing duels")
 
-		keys, err := redis.Scan(context.Background(), "duelUse:*", 100, 0)
+		keys, err := redis.Scan(ctx, "duelUse:*", 100, 0)
 		if err != nil {
 			logger.Error.Println("Failed scanning keys for duels", err)
 
@@ -121,7 +130,7 @@ func decrementDuels(ctx context.Context, redis *RedisClient) {
 			return decrementedKeys
 		`
 
-		value, err := redis.Eval(context.Background(), luaScript, keys).Result()
+		value, err := redis.Eval(ctx, luaScript, keys).Result()
 		if err != nil {
 			logger.Error.Println("Failed decrementing duels", err)
 		}
@@ -141,7 +150,7 @@ func deleteOldUploads(ctx context.Context, postgres *PostgresClient) {
 			OR (expires_at IS NOT NULL AND expires_at < NOW());
 		`
 
-		_, err := postgres.Exec(context.Background(), query)
+		_, err := postgres.Exec(ctx, query)
 		if err != nil {
 			logger.Error.Println("Error deleting old uploads ", err)
 		}
@@ -163,7 +172,7 @@ func updateAggregateTable(ctx context.Context, postgres *PostgresClient) {
 			SET channel_usage = EXCLUDED.channel_usage;
 		`
 
-		_, err := postgres.Exec(context.Background(), query)
+		_, err := postgres.Exec(ctx, query)
 		if err != nil {
 			logger.Error.Println("Error updating aggregate table", err)
 		}
@@ -176,7 +185,7 @@ func updateHourlyUsage(ctx context.Context, postgres *PostgresClient) {
 	logger.Info.Println("Updating hourly usage")
 	query := `UPDATE gpt_usage SET hourly_usage = 0;`
 
-	_, err := postgres.Exec(context.Background(), query)
+	_, err := postgres.Exec(ctx, query)
 	if err != nil {
 		logger.Error.Println("Error updating hourly usage", err)
 	}
@@ -188,7 +197,7 @@ func updateDailyUsage(ctx context.Context, postgres *PostgresClient) {
 	logger.Info.Println("Updating daily usage")
 	query := `UPDATE gpt_usage SET daily_usage = 0`
 
-	_, err := postgres.Exec(context.Background(), query)
+	_, err := postgres.Exec(ctx, query)
 	if err != nil {
 		logger.Error.Println("Error updating daily usage", err)
 	}
@@ -282,7 +291,7 @@ func upsertOAuthToken(
 	`
 
 	_, err := postgres.Exec(
-		context.Background(),
+		ctx,
 		query,
 		con.PlatformID,
 		oauth.AccessToken,
@@ -304,10 +313,10 @@ func refreshOrDelete(
 ) (bool, error) {
 	var err error
 	if con.RefreshToken == "" {
-		return false, errors.New("missing refresh token")
+		return false, errMissingRefreshToken
 	}
 
-	refreshResult, err := utils.RefreshHelixToken(config, con.RefreshToken)
+	refreshResult, err := utils.RefreshHelixToken(ctx, config, con.RefreshToken)
 	if err != nil || refreshResult == nil {
 		return false, err
 	}
@@ -355,7 +364,7 @@ func validateTokens(ctx context.Context, config common.Config, postgres *Postgre
 			continue
 		}
 
-		valid, _, err := utils.ValidateHelixToken(con.AccessToken, false)
+		valid, _, err := utils.ValidateHelixToken(ctx, con.AccessToken, false)
 		if err != nil {
 			logger.Error.Println("Error validating token ", err)
 
@@ -378,9 +387,8 @@ func validateTokens(ctx context.Context, config common.Config, postgres *Postgre
 			}
 
 			continue
-		} else {
-			validated++
 		}
+		validated++
 
 		time.Sleep(200 * time.Millisecond)
 	}
@@ -463,12 +471,12 @@ func refreshAllHelixTokens(ctx context.Context, config common.Config, postgres *
 
 func sortFiles(files []string) func(i, j int) bool {
 	return func(i, j int) bool {
-		fileI, errI := os.Stat(filepath.Join(DUMP_PATH, files[i]))
+		fileI, errI := os.Stat(filepath.Join(dumpPath, files[i]))
 		if errI != nil {
 			return false
 		}
 
-		fileJ, errJ := os.Stat(filepath.Join(DUMP_PATH, files[j]))
+		fileJ, errJ := os.Stat(filepath.Join(dumpPath, files[j]))
 		if errJ != nil {
 			return true
 		}
@@ -477,15 +485,15 @@ func sortFiles(files []string) func(i, j int) bool {
 	}
 }
 
-func deleteOldDumps(files []string, max int) {
-	logger.Debug.Printf("Checking for old dump files, current count: %d, max: %d", len(files), max)
-	if len(files) <= max {
+func deleteOldDumps(files []string, maxSize int) {
+	logger.Debug.Printf("Checking for old dump files, current count: %d, max: %d", len(files), maxSize)
+	if len(files) <= maxSize {
 		return
 	}
 
 	sort.Slice(files, sortFiles(files))
 
-	filesToDelete := files[:len(files)-max+1]
+	filesToDelete := files[:len(files)-maxSize+1]
 	for _, file := range filesToDelete {
 		err := os.Remove(file)
 		if err != nil {
@@ -504,13 +512,13 @@ func backupPostgres(
 ) {
 	logger.Debug.Println("Backing up Postgres")
 
-	if err := os.MkdirAll(DUMP_PATH, os.ModePerm); err != nil {
+	if err := os.MkdirAll(dumpPath, 0o750); err != nil {
 		logger.Error.Println("Failed to create backup folder:", err)
 
 		return
 	}
 
-	files, err := filepath.Glob(filepath.Join(DUMP_PATH, "*.sql.zst"))
+	files, err := filepath.Glob(filepath.Join(dumpPath, "*.sql.zst"))
 	if err != nil {
 		logger.Error.Println("Failed to list dump files:", err)
 
@@ -520,10 +528,11 @@ func backupPostgres(
 	deleteOldDumps(files, 10)
 
 	filePath := filepath.Join(
-		DUMP_PATH,
+		dumpPath,
 		fmt.Sprintf("data_%d.sql.zst", time.Now().Unix()),
 	)
 
+	//nolint:gosec
 	cmd := exec.Command("sh", "-c", fmt.Sprintf(
 		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | zstd -3 --threads=%d > %s",
 		config.Postgres.Password,
@@ -535,10 +544,10 @@ func backupPostgres(
 	))
 
 	defer func() {
-		if err := cmd.Process.Release(); err != nil {
+		if err = cmd.Process.Release(); err != nil {
 			logger.Error.Println("Failed to release pg_dump process:", err)
 
-			if err := cmd.Process.Kill(); err != nil {
+			if err = cmd.Process.Kill(); err != nil {
 				logger.Error.Fatalln("Failed to kill pg_dump process:", err)
 			}
 		}
@@ -548,7 +557,7 @@ func backupPostgres(
 	cmd.Stderr = &stderr
 
 	start := time.Now()
-	if err := cmd.Run(); err != nil {
+	if err = cmd.Run(); err != nil {
 		logger.Error.Println("Failed to execute pg_dump:", err, stderr.String())
 
 		return
@@ -614,7 +623,7 @@ func getDatabaseSize(ctx context.Context, postgres *PostgresClient, dbName strin
 		return size, nil
 	}
 
-	return "", fmt.Errorf("no rows returned for database size query")
+	return "", errNoRows
 }
 
 func optimizeClickhouse(ctx context.Context, config common.Config, clickhouse *ClickhouseClient) {

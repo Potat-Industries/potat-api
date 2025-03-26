@@ -77,7 +77,7 @@ func StartServing(
 	}
 
 	// Catch-all for unmatched routes
-	api.router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	api.router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		GenericResponse(w, http.StatusNotFound, map[string]string{"error": "Not Found"}, time.Now())
 	})
 

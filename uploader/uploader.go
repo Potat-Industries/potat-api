@@ -59,6 +59,7 @@ func getHashGenerator(secret string) func(key string) string {
 
 // StartServing will start the uploader server on the configured port.
 func StartServing(
+	ctx context.Context,
 	config common.Config,
 	postgres *db.PostgresClient,
 	redis *db.RedisClient,
@@ -106,7 +107,7 @@ func StartServing(
 		uploader.keyLength = config.Haste.KeyLength
 	}
 
-	uploader.postgres.CheckTableExists(createTable)
+	uploader.postgres.CheckTableExists(ctx, createTable)
 
 	logger.Info.Printf("Uploader listening on %s", uploader.server.Addr)
 
@@ -240,7 +241,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 	}
 
 	data, mimeType, name, _, err := u.postgres.GetFileByKey(request.Context(), key)
-	if errors.Is(err, db.PostgresNoRows) {
+	if errors.Is(err, db.ErrPostgresNoRows) {
 		http.Error(writer, "Not Found", http.StatusNotFound)
 
 		return

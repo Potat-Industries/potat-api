@@ -1,3 +1,4 @@
+// Package db provides database clients and functions to retrieve or update data.
 package db
 
 import (
@@ -8,12 +9,15 @@ import (
 	"potat-api/common/logger"
 )
 
+// RedisClient is a wrapper around the Redis client to provide a custom client.
 type RedisClient struct {
 	*redis.Client
 }
 
-var RedisErrNil = redis.Nil
+// ErrRedisNil is a constant for redis.Nil to handle nil responses from Redis.
+var ErrRedisNil = redis.Nil
 
+// InitRedis initializes a Redis client using the provided configuration.
 func InitRedis(config common.Config) (*RedisClient, error) {
 	host := config.Redis.Host
 	if host == "" {
@@ -34,6 +38,7 @@ func InitRedis(config common.Config) (*RedisClient, error) {
 	return &RedisClient{redis.NewClient(options)}, nil
 }
 
+// Scan retrieves keys from Redis that match a given pattern using the SCAN command.
 func (r *RedisClient) Scan(
 	ctx context.Context,
 	match string,

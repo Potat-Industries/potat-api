@@ -1,3 +1,4 @@
+// Package get contains routes for http.MethodGet requests.
 package get
 
 import (
@@ -15,6 +16,7 @@ import (
 	"potat-api/common/utils"
 )
 
+// HelpResponse is the response type for the /help endpoint.
 type HelpResponse = common.GenericResponse[common.Command]
 
 func init() {
@@ -49,12 +51,12 @@ func getCache(ctx context.Context, key string) (*[]common.Command, error) {
 	}
 
 	data, err := redis.Get(ctx, key).Bytes()
-	if (err != nil && !errors.Is(err, db.RedisErrNil)) || data == nil {
+	if (err != nil && !errors.Is(err, db.ErrRedisNil)) || data == nil {
 		return &[]common.Command{}, err
 	}
 
 	var commands []common.Command
-	err = json.Unmarshal([]byte(data), &commands)
+	err = json.Unmarshal(data, &commands)
 	if err != nil {
 		return &[]common.Command{}, err
 	}
@@ -75,8 +77,8 @@ func filterCommands(commands []common.Command) []common.Command {
 }
 
 func getCommands(ctx context.Context, writer http.ResponseWriter, start time.Time, data []byte) {
-	var commandsJson []common.Command
-	err := json.Unmarshal(data, &commandsJson)
+	var commandsJSON []common.Command
+	err := json.Unmarshal(data, &commandsJSON)
 	if err != nil {
 		logger.Error.Printf("Error unmarshalling commands: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, HelpResponse{
@@ -86,7 +88,7 @@ func getCommands(ctx context.Context, writer http.ResponseWriter, start time.Tim
 
 		return
 	}
-	filteredCommands := filterCommands(commandsJson)
+	filteredCommands := filterCommands(commandsJSON)
 
 	if len(filteredCommands) > 0 {
 		go setCache(ctx, "website:commands", data)
@@ -108,9 +110,8 @@ func getCommandsHandler(writer http.ResponseWriter, request *http.Request) {
 		}, start)
 
 		return
-	} else {
-		writer.Header().Set("X-Cache-Hit", "MISS")
 	}
+	writer.Header().Set("X-Cache-Hit", "MISS")
 
 	response, err := utils.BridgeRequest(
 		5*time.Second,

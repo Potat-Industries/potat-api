@@ -1,3 +1,4 @@
+// Package db provides database clients and functions to retrieve or update data.
 package db
 
 import (
@@ -9,6 +10,7 @@ import (
 	"potat-api/common/logger"
 )
 
+// ClickhouseClient is a wrapper around the ClickHouse driver.Conn to provide a custom client.
 type ClickhouseClient struct {
 	driver.Conn
 }
@@ -17,7 +19,7 @@ type ClickhouseClient struct {
 func InitClickhouse(config common.Config) (*ClickhouseClient, error) {
 	host := config.Clickhouse.Host
 	if host == "" {
-		host = "localhost"
+		host = "localhost" //nolint:goconst
 	}
 
 	port := config.Clickhouse.Port

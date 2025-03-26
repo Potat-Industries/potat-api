@@ -1,3 +1,4 @@
+// Package post contains routes for http.MethodPost requests.
 package post
 
 import (
@@ -24,11 +25,11 @@ func init() {
 	})
 }
 
-func createRedirect(w http.ResponseWriter, r *http.Request) {
+func createRedirect(writer http.ResponseWriter, request *http.Request) { //nolint:cyclop
 	var input common.Redirect
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
 		logger.Error.Printf("Invalid request body: %v", err)
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		http.Error(writer, "Bad Request", http.StatusBadRequest)
 
 		return
 	}
@@ -37,17 +38,17 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 		input.URL = "https://" + input.URL
 	}
 
-	postgres, ok := r.Context().Value(middleware.PostgresKey).(*db.PostgresClient)
+	postgres, ok := request.Context().Value(middleware.PostgresKey).(*db.PostgresClient)
 	if !ok {
 		logger.Error.Println("Postgres client not found in context")
 
 		return
 	}
 
-	key, err := postgres.GetKeyByRedirect(r.Context(), input.URL)
+	key, err := postgres.GetKeyByRedirect(request.Context(), input.URL)
 	if err == nil && key != "" {
-		response := fmt.Sprintf("https://%s/%s", r.Host, key)
-		_, err := w.Write([]byte(response))
+		response := fmt.Sprintf("https://%s/%s", request.Host, key)
+		_, err = writer.Write([]byte(response))
 		if err != nil {
 			logger.Error.Printf("Failed to write response: %v", err)
 		}
@@ -55,24 +56,23 @@ func createRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key, err = generateUniqueKey(r.Context())
+	key, err = generateUniqueKey(request.Context())
 	if err != nil {
 		logger.Error.Printf("Error generating key: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
 	}
 
-	if err := postgres.NewRedirect(r.Context(), key, input.URL); err != nil {
+	if err = postgres.NewRedirect(request.Context(), key, input.URL); err != nil {
 		logger.Error.Printf("Error inserting redirect: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
 	}
 
-	response := fmt.Sprintf("https://%s/%s", r.Host, key)
-	_, err = w.Write([]byte(response))
-	if err != nil {
+	response := fmt.Sprintf("https://%s/%s", request.Host, key)
+	if _, err = writer.Write([]byte(response)); err != nil {
 		logger.Error.Printf("Failed to write response: %v", err)
 	}
 }

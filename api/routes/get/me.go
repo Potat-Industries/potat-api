@@ -1,3 +1,4 @@
+// Package get contains routes for http.MethodGet requests.
 package get
 
 import (
@@ -13,6 +14,7 @@ import (
 	"potat-api/common/logger"
 )
 
+// SiteUserData represents the user data returned by the /twitch/me endpoint.
 type SiteUserData struct {
 	Name      string `json:"name"`
 	TwitchPFP string `json:"twitch_pfp"`
@@ -22,6 +24,7 @@ type SiteUserData struct {
 	JoinState string `json:"join_state"`
 }
 
+// AuthorizedUserResponse is the response type for the /twitch/me endpoint.
 type AuthorizedUserResponse = common.GenericResponse[SiteUserData]
 
 func init() {
@@ -49,12 +52,12 @@ func getChannelState(ctx context.Context, channelID string, platform common.Plat
 	return channelData.State
 }
 
-func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
+func getAuthenticatedUser(writer http.ResponseWriter, request *http.Request) {
 	start := time.Now()
 
-	userData, ok := r.Context().Value(middleware.AuthedUser).(*common.User)
+	userData, ok := request.Context().Value(middleware.AuthedUser).(*common.User)
 	if !ok || userData == nil {
-		api.GenericResponse(w, http.StatusUnauthorized, AuthorizedUserResponse{
+		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "Unauthorized"}},
 		}, start)
@@ -64,7 +67,7 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 
 	// Check userconnections length
 	if len(userData.Connections) == 0 {
-		api.GenericResponse(w, http.StatusUnauthorized, AuthorizedUserResponse{
+		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "User connections not found"}},
 		}, start)
@@ -86,7 +89,7 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if twitchConnection.UserID == "" {
-		api.GenericResponse(w, http.StatusUnauthorized, AuthorizedUserResponse{
+		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "User Twitch connection not found"}},
 		}, start)
@@ -94,17 +97,7 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var stvMeta common.StvUserMeta
-	err := json.Unmarshal(stvConnection.Meta, &stvMeta)
-	if err != nil {
-		logger.Error.Println("Error unmarshalling stv meta: ", err)
-	}
-
-	var twitchMeta common.TwitchUserMeta
-	err = json.Unmarshal(twitchConnection.Meta, &twitchMeta)
-	if err != nil {
-		logger.Error.Println("Error unmarshalling twitch meta: ", err)
-	}
+	twitchMeta, stvMeta := parseMetadata(twitchConnection.Meta, stvConnection.Meta)
 
 	user := SiteUserData{
 		Name:      userData.Display,
@@ -112,10 +105,25 @@ func getAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
 		StvPFP:    stvConnection.PFP,
 		ChatColor: twitchMeta.Color,
 		UserPaint: stvMeta.PaintID,
-		JoinState: getChannelState(r.Context(), twitchConnection.UserID, common.TWITCH),
+		JoinState: getChannelState(request.Context(), twitchConnection.UserID, common.TWITCH),
 	}
 
-	api.GenericResponse(w, http.StatusOK, AuthorizedUserResponse{
+	api.GenericResponse(writer, http.StatusOK, AuthorizedUserResponse{
 		Data: &[]SiteUserData{user},
 	}, start)
+}
+
+func parseMetadata(twitchMeta, stvMeta common.UserMeta) (common.TwitchUserMeta, common.StvUserMeta) {
+	twitchData := common.TwitchUserMeta{}
+	stvData := common.StvUserMeta{}
+
+	if err := json.Unmarshal([]byte(twitchMeta), &twitchData); err != nil {
+		logger.Error.Printf("Error parsing Twitch metadata: %v", err)
+	}
+
+	if err := json.Unmarshal([]byte(stvMeta), &stvData); err != nil {
+		logger.Error.Printf("Error parsing STV metadata: %v", err)
+	}
+
+	return twitchData, stvData
 }

@@ -31,6 +31,7 @@ type redirects struct {
 
 // StartServing will start the redirects server on the configured port.
 func StartServing(
+	ctx context.Context,
 	config common.Config,
 	postgres *db.PostgresClient,
 	redis *db.RedisClient,
@@ -60,7 +61,7 @@ func StartServing(
 		IdleTimeout:  60 * time.Second,
 	}
 
-	redirector.postgres.CheckTableExists(createTable)
+	redirector.postgres.CheckTableExists(ctx, createTable)
 
 	logger.Info.Printf("Redirects listening on %s", redirector.server.Addr)
 
@@ -76,7 +77,7 @@ func (r *redirects) setRedis(ctx context.Context, key, data string) {
 
 func (r *redirects) getRedis(ctx context.Context, key string) (string, error) {
 	data, err := r.redis.Get(ctx, key).Result()
-	if err != nil && !errors.Is(err, db.RedisErrNil) {
+	if err != nil && !errors.Is(err, db.ErrRedisNil) {
 		return "", err
 	}
 
@@ -103,7 +104,7 @@ func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Reques
 
 	redirect, err := r.postgres.GetRedirectByKey(request.Context(), key)
 	if err != nil {
-		if errors.Is(err, db.PostgresNoRows) {
+		if errors.Is(err, db.ErrPostgresNoRows) {
 			http.NotFound(writer, request)
 
 			return

@@ -41,6 +41,7 @@ type hastebin struct {
 
 // StartServing will start the Haste server on the configured port.
 func StartServing(
+	ctx context.Context,
 	config common.Config,
 	postgres *db.PostgresClient,
 	redis *db.RedisClient,
@@ -88,7 +89,7 @@ func StartServing(
 		haste.keyLength = config.Haste.KeyLength
 	}
 
-	haste.postgres.CheckTableExists(createTable)
+	haste.postgres.CheckTableExists(ctx, createTable)
 
 	logger.Info.Printf("Haste listening on %s", haste.server.Addr)
 
@@ -310,7 +311,7 @@ func (h *hastebin) chooseKey(ctx context.Context) (string, error) {
 		}
 
 		data, err := h.postgres.GetHaste(ctx, key)
-		if err != nil && !errors.Is(err, db.PostgresNoRows) {
+		if err != nil && !errors.Is(err, db.ErrPostgresNoRows) {
 			return "", err
 		}
 

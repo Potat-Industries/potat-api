@@ -46,6 +46,7 @@ type location struct {
 }
 
 func makeRequest(
+	ctx context.Context,
 	method string,
 	url string,
 	headers map[string]string,
@@ -55,7 +56,7 @@ func makeRequest(
 		body = &bytes.Buffer{}
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +78,7 @@ func makeRequest(
 }
 
 // BatchLoadStvData fetches user data from 7TV for a batch of Twitch user IDs.
-func BatchLoadStvData(ids []string) ([]StvUser, error) {
+func BatchLoadStvData(ctx context.Context, ids []string) ([]StvUser, error) {
 	var queryParts []string
 
 	for _, id := range ids {
@@ -101,6 +102,7 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 	}
 
 	res, err := makeRequest(
+		ctx,
 		"POST",
 		"https://7tv.io/v3/gql",
 		headers,
@@ -138,6 +140,7 @@ func BatchLoadStvData(ids []string) ([]StvUser, error) {
 
 // ValidateHelixToken checks if a given Twitch OAuth token is valid.
 func ValidateHelixToken(
+	ctx context.Context,
 	token string,
 	returnAll bool,
 ) (bool, *common.TwitchValidation, error) {
@@ -146,6 +149,7 @@ func ValidateHelixToken(
 	}
 
 	res, err := makeRequest(
+		ctx,
 		"GET",
 		"https://id.twitch.tv/oauth2/validate",
 		map[string]string{"Authorization": "OAuth " + token},
@@ -175,7 +179,11 @@ func ValidateHelixToken(
 }
 
 // RefreshHelixToken refreshes a Twitch OAuth token using the refresh token flow.
-func RefreshHelixToken(config common.Config, token string) (*common.GenericOAUTHResponse, error) {
+func RefreshHelixToken(
+	ctx context.Context,
+	config common.Config,
+	token string,
+) (*common.GenericOAUTHResponse, error) {
 	if token == "" {
 		return nil, errEmptyToken
 	}
@@ -192,6 +200,7 @@ func RefreshHelixToken(config common.Config, token string) (*common.GenericOAUTH
 	}.Encode()
 
 	res, err := makeRequest(
+		ctx,
 		"POST",
 		"https://id.twitch.tv/oauth2/token",
 		map[string]string{"Content-Type": "application/x-www-form-urlencoded"},

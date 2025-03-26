@@ -50,7 +50,7 @@ func ObserveMetrics(config common.Config) (*Metrics, *http.Server) {
 
 	metrics := &Metrics{
 		httpRequestCounter: httpRequestCounter,
-		socketGauge: socketGauge,
+		socketGauge:        socketGauge,
 	}
 
 	return metrics, server
@@ -58,10 +58,6 @@ func ObserveMetrics(config common.Config) (*Metrics, *http.Server) {
 
 // ObserveInboundRequests increments the counter for inbound requests to bot endpoints.
 func (m *Metrics) ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string) {
-	if m.httpRequestCounter == nil {
-		return
-	}
-
 	m.httpRequestCounter.WithLabelValues(
 		host,
 		endpoint,
@@ -74,9 +70,5 @@ func (m *Metrics) ObserveInboundRequests(host, endpoint, ip, method, status, cac
 
 // GaugeSocketConnections is a gauge to track the number of active socket connections.
 func (m *Metrics) GaugeSocketConnections(value float64) {
-	if m.socketGauge == nil {
-		return
-	}
-
 	m.socketGauge.Set(value)
 }

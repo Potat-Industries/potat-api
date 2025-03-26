@@ -1,3 +1,4 @@
+// Package get contains routes for http.MethodGet requests.
 package get
 
 import (
@@ -17,16 +18,16 @@ import (
 	"potat-api/common/logger"
 )
 
-type PotatoInfo struct {
+type potatoInfo struct {
 	JoinedAt      string  `json:"joinedAt"`
-	Steal         Steal   `json:"steal"`
-	Trample       Trample `json:"trample"`
-	Potato        Potato  `json:"potato"`
-	Duel          Duel    `json:"duel"`
-	Gamble        Gamble  `json:"gamble"`
-	Quiz          Quiz    `json:"quiz"`
-	Cdr           CDR     `json:"cdr"`
-	Eat           Eat     `json:"eat"`
+	Steal         steal   `json:"steal"`
+	Trample       trample `json:"trample"`
+	Potato        potato  `json:"potato"`
+	Duel          duel    `json:"duel"`
+	Gamble        gamble  `json:"gamble"`
+	Quiz          quiz    `json:"quiz"`
+	Cdr           cdr     `json:"cdr"`
+	Eat           eat     `json:"eat"`
 	Rank          int     `json:"rank"`
 	TaxMultiplier int     `json:"taxMultiplier"`
 	Prestige      int     `json:"prestige"`
@@ -34,19 +35,19 @@ type PotatoInfo struct {
 	Verbose       bool    `json:"verbose"`
 }
 
-type Potato struct {
+type potato struct {
 	AverageResponse string `json:"averageResponse"`
 	ReadyAt         int    `json:"readyAt"`
 	Usage           int    `json:"usage"`
 	Ready           bool   `json:"ready"`
 }
 
-type CDR struct {
+type cdr struct {
 	ReadyAt int  `json:"readyAt"`
 	Ready   bool `json:"ready"`
 }
 
-type Trample struct {
+type trample struct {
 	TrampledBy    *string `json:"trampledBy"`
 	ReadyAt       int     `json:"readyAt"`
 	TrampleCount  int     `json:"trampleCount"`
@@ -54,7 +55,7 @@ type Trample struct {
 	Ready         bool    `json:"ready"`
 }
 
-type Steal struct {
+type steal struct {
 	StoleBy      *string `json:"stoleBy"`
 	StolenAmount *int    `json:"stolenAmount"`
 	ReadyAt      int     `json:"readyAt"`
@@ -63,26 +64,26 @@ type Steal struct {
 	Ready        bool    `json:"ready"`
 }
 
-type Eat struct {
+type eat struct {
 	ReadyAt int  `json:"readyAt"`
 	Ready   bool `json:"ready"`
 }
 
-type Quiz struct {
+type quiz struct {
 	ReadyAt   int  `json:"readyAt"`
 	Ready     bool `json:"ready"`
 	Attempted int  `json:"attempted"`
 	Completed int  `json:"completed"`
 }
 
-type Gamble struct {
+type gamble struct {
 	WinCount    int `json:"winCount"`
 	LoseCount   int `json:"loseCount"`
 	TotalWins   int `json:"totalWins"`
 	TotalLosses int `json:"totalLosses"`
 }
 
-type Duel struct {
+type duel struct {
 	WinCount     int `json:"winCount"`
 	LoseCount    int `json:"loseCount"`
 	TotalWins    int `json:"totalWins"`
@@ -90,12 +91,14 @@ type Duel struct {
 	CaughtLosses int `json:"caughtLosses"`
 }
 
+// UsersResponse is the response type for the /users/{username} endpoint.
 type UsersResponse = common.GenericResponse[UserInfo]
 
+// UserInfo is the structure for UsersResponse.
 type UserInfo struct {
 	User     *common.User    `json:"user"`
 	Channel  *common.Channel `json:"channel"`
-	Potatoes *PotatoInfo     `json:"potatoes"`
+	Potatoes *potatoInfo     `json:"potatoes"`
 }
 
 func init() {
@@ -119,36 +122,36 @@ func tidyPotatoInfo(
 	lastSteal,
 	lastEat,
 	lastQuiz int,
-) *PotatoInfo {
+) *potatoInfo {
 	if data == nil {
 		return nil
 	}
 
-	return &PotatoInfo{
+	return &potatoInfo{
 		JoinedAt:      data.FirstSeen,
 		Count:         data.PotatoCount,
 		Prestige:      data.PotatoPrestige,
 		Rank:          data.PotatoRank,
 		TaxMultiplier: data.TaxMultiplier,
 		Verbose:       data.NotVerbose,
-		Potato: Potato{
+		Potato: potato{
 			ReadyAt:         lastPotato,
 			Ready:           time.Now().UnixMilli() > int64(lastPotato),
 			Usage:           data.HarvestCount,
 			AverageResponse: data.AverageResponseTime,
 		},
-		Cdr: CDR{
+		Cdr: cdr{
 			ReadyAt: lastCDR,
 			Ready:   time.Now().UnixMilli()-int64(lastCDR) > 30*60*1000,
 		},
-		Trample: Trample{
+		Trample: trample{
 			ReadyAt:       lastTrample,
 			Ready:         time.Now().UnixMilli() > int64(lastTrample),
 			TrampleCount:  data.TrampleCount,
 			TrampledCount: data.TrampledCount,
 			TrampledBy:    data.TrampledBy,
 		},
-		Steal: Steal{
+		Steal: steal{
 			ReadyAt:      lastSteal,
 			Ready:        time.Now().UnixMilli() > int64(lastSteal),
 			StolenCount:  data.StolenCount,
@@ -156,23 +159,23 @@ func tidyPotatoInfo(
 			StoleBy:      data.StoleFrom,
 			StolenAmount: data.StoleAmount,
 		},
-		Eat: Eat{
+		Eat: eat{
 			ReadyAt: lastEat,
 			Ready:   time.Now().UnixMilli() > int64(lastEat),
 		},
-		Quiz: Quiz{
+		Quiz: quiz{
 			ReadyAt:   lastQuiz,
 			Ready:     getQuizReady(lastQuiz),
 			Attempted: data.QuizCount,
 			Completed: data.QuizCompleteCount,
 		},
-		Gamble: Gamble{
+		Gamble: gamble{
 			WinCount:    data.GambleWinCount,
 			LoseCount:   data.GambleLossCount,
 			TotalWins:   data.GambleWinsTotal,
 			TotalLosses: data.GambleLossesTotal,
 		},
-		Duel: Duel{
+		Duel: duel{
 			WinCount:     data.DuelWinCount,
 			LoseCount:    data.DuelLossCount,
 			TotalWins:    data.DuelWinsAmount,
@@ -182,7 +185,7 @@ func tidyPotatoInfo(
 	}
 }
 
-func loadUser(ctx context.Context, user string) UserInfo {
+func loadUser(ctx context.Context, user string) UserInfo { //nolint:gocognit,cyclop
 	postgres, ok := ctx.Value(middleware.PostgresKey).(*db.PostgresClient)
 	if !ok {
 		logger.Error.Println("Postgres client not found in context")
@@ -215,7 +218,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := postgres.GetUserByName(ctx, user)
-		if err != nil && !errors.Is(err, db.PostgresNoRows) {
+		if err != nil && !errors.Is(err, db.ErrPostgresNoRows) {
 			logger.Warn.Println("Error fetching user data: ", err)
 		} else {
 			userData = data
@@ -225,8 +228,8 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	go func() {
 		defer wg.Done()
 
-		data, err := postgres.GetChannelByName(ctx, user, common.Platforms(common.TWITCH))
-		if err != nil && !errors.Is(err, db.PostgresNoRows) {
+		data, err := postgres.GetChannelByName(ctx, user, common.TWITCH)
+		if err != nil && !errors.Is(err, db.ErrPostgresNoRows) {
 			logger.Warn.Println("Error fetching channel data: ", err)
 		} else {
 			channelData = data
@@ -237,7 +240,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := postgres.GetPotatoData(ctx, user)
-		if err != nil && !errors.Is(err, db.PostgresNoRows) {
+		if err != nil && !errors.Is(err, db.ErrPostgresNoRows) {
 			logger.Warn.Println("Error fetching potato data: ", err)
 		} else {
 			potatData = data
@@ -248,7 +251,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := redis.Get(ctx, fmt.Sprintf("potato:%s", user)).Int()
-		if err != nil && !errors.Is(err, db.RedisErrNil) {
+		if err != nil && !errors.Is(err, db.ErrRedisNil) {
 			logger.Warn.Println("Error fetching last potato: ", err)
 		} else {
 			lastPotato = data
@@ -259,7 +262,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := redis.Get(ctx, fmt.Sprintf("cdr:%s", user)).Int()
-		if err != nil && !errors.Is(err, db.RedisErrNil) {
+		if err != nil && !errors.Is(err, db.ErrRedisNil) {
 			logger.Warn.Println("Error fetching last cdr: ", err)
 		} else {
 			lastCDR = data
@@ -270,7 +273,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := redis.Get(ctx, fmt.Sprintf("trample:%s", user)).Int()
-		if err != nil && !errors.Is(err, db.RedisErrNil) {
+		if err != nil && !errors.Is(err, db.ErrRedisNil) {
 			logger.Warn.Println("Error fetching last trample: ", err)
 		} else {
 			lastTrample = data
@@ -281,7 +284,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := redis.Get(ctx, fmt.Sprintf("steal:%s", user)).Int()
-		if err != nil && !errors.Is(err, db.RedisErrNil) {
+		if err != nil && !errors.Is(err, db.ErrRedisNil) {
 			logger.Warn.Println("Error fetching last steal: ", err)
 		} else {
 			lastSteal = data
@@ -292,7 +295,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := redis.Get(ctx, fmt.Sprintf("eat:%s", user)).Int()
-		if err != nil && !errors.Is(err, db.RedisErrNil) {
+		if err != nil && !errors.Is(err, db.ErrRedisNil) {
 			logger.Warn.Println("Error fetching last eat: ", err)
 		} else {
 			lastEat = data
@@ -303,7 +306,7 @@ func loadUser(ctx context.Context, user string) UserInfo {
 		defer wg.Done()
 
 		data, err := redis.Get(ctx, fmt.Sprintf("quiz:%s", user)).Int()
-		if err != nil && !errors.Is(err, db.RedisErrNil) {
+		if err != nil && !errors.Is(err, db.ErrRedisNil) {
 			logger.Warn.Println("Error fetching last quiz: ", err)
 		} else {
 			lastQuiz = data
@@ -329,10 +332,10 @@ func loadUser(ctx context.Context, user string) UserInfo {
 	}
 }
 
-func getUsers(w http.ResponseWriter, r *http.Request) {
+func getUsers(writer http.ResponseWriter, request *http.Request) {
 	start := time.Now()
 
-	params := mux.Vars(r)
+	params := mux.Vars(request)
 	word := params["username"]
 	if word == "" {
 		err := "No username provided"
@@ -342,7 +345,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
-		api.GenericResponse(w, http.StatusBadRequest, res, start)
+		api.GenericResponse(writer, http.StatusBadRequest, res, start)
 
 		return
 	}
@@ -356,7 +359,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
-		api.GenericResponse(w, http.StatusBadRequest, res, start)
+		api.GenericResponse(writer, http.StatusBadRequest, res, start)
 
 		return
 	}
@@ -368,11 +371,11 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 	wg.Add(len(userArray))
 	for _, user := range userArray {
-		go func() {
+		go func(ctx context.Context) {
 			defer wg.Done()
-			info := loadUser(r.Context(), user)
+			info := loadUser(ctx, user)
 			dataChan <- info
-		}()
+		}(request.Context())
 	}
 
 	go func() {
@@ -392,7 +395,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 			Errors: &[]common.ErrorMessage{{Message: err}},
 		}
 
-		api.GenericResponse(w, http.StatusNotFound, res, start)
+		api.GenericResponse(writer, http.StatusNotFound, res, start)
 
 		return
 	}
@@ -401,5 +404,5 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		Data: &dataArray,
 	}
 
-	api.GenericResponse(w, http.StatusOK, res, start)
+	api.GenericResponse(writer, http.StatusOK, res, start)
 }
