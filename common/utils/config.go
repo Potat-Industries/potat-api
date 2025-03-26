@@ -1,33 +1,28 @@
+// Package utils provides utility functions and types for all routes.
 package utils
 
 import (
 	"encoding/json"
 	"os"
 
-	"potat-api/common"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
-var config *common.Config
-
+// LoadConfig loads the configuration from the config.json file.
 func LoadConfig() *common.Config {
-	if config != nil {
-		return config
-	}
-
 	data, err := loadOrCopy()
 	if err != nil {
-		Error.Panicln("Failed loading config", err)
+		logger.Error.Panicln("Failed loading config", err)
 	}
 
 	var configuration common.Config
 	err = json.Unmarshal(data, &configuration)
 	if err != nil {
-		Error.Panicln("Failed unmarshaling config", err)
+		logger.Error.Panicln("Failed unmarshaling config", err)
 	}
 
-	config = &configuration
-
-	return config
+	return &configuration
 }
 
 func loadOrCopy() ([]byte, error) {
@@ -44,14 +39,14 @@ func loadOrCopy() ([]byte, error) {
 }
 
 func copyExampleConfig() ([]byte, error) {
-	Warn.Println("Config file not found, copying example config")
+	logger.Warn.Println("Config file not found, copying example config")
 
 	data, err := os.ReadFile("exampleconfig.json")
 	if err != nil {
 		return nil, err
 	}
 
-	err = os.WriteFile("config.json", data, 0o644)
+	err = os.WriteFile("config.json", data, 0o600)
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,4 @@
+// Package get contains routes for http.MethodGet requests.
 package get
 
 import (
@@ -7,12 +8,15 @@ import (
 	"net/http"
 	"time"
 
-	"potat-api/api"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/api"
+	"github.com/Potat-Industries/potat-api/api/middleware"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 )
 
+// HelpResponse is the response type for the /help endpoint.
 type HelpResponse = common.GenericResponse[common.Command]
 
 func init() {
@@ -20,24 +24,39 @@ func init() {
 		Path:    "/help",
 		Method:  http.MethodGet,
 		Handler: getCommandsHandler,
-	}, false)
+		UseAuth: false,
+	})
 }
 
-func setCache(key string, data interface{}) {
-	err := db.Redis.SetEx(context.Background(), key, data, time.Hour).Err()
+func setCache(ctx context.Context, key string, data interface{}) {
+	redis, ok := ctx.Value(middleware.RedisKey).(*db.RedisClient)
+	if !ok {
+		logger.Error.Println("Redis client not found in context")
+
+		return
+	}
+
+	err := redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
-		utils.Error.Printf("Error caching commands: %v", err)
+		logger.Error.Printf("Error caching commands: %v", err)
 	}
 }
 
 func getCache(ctx context.Context, key string) (*[]common.Command, error) {
-	data, err := db.Redis.Get(ctx, key).Bytes()
-	if (err != nil && !errors.Is(err, db.RedisErrNil)) || data == nil {
+	redis, ok := ctx.Value(middleware.RedisKey).(*db.RedisClient)
+	if !ok {
+		logger.Error.Println("Redis client not found in context")
+
+		return nil, middleware.ErrMissingContext
+	}
+
+	data, err := redis.Get(ctx, key).Bytes()
+	if (err != nil && !errors.Is(err, db.ErrRedisNil)) || data == nil {
 		return &[]common.Command{}, err
 	}
 
 	var commands []common.Command
-	err = json.Unmarshal([]byte(data), &commands)
+	err = json.Unmarshal(data, &commands)
 	if err != nil {
 		return &[]common.Command{}, err
 	}
@@ -57,52 +76,50 @@ func filterCommands(commands []common.Command) []common.Command {
 	return filteredCommands
 }
 
-func getCommands(w http.ResponseWriter, start time.Time, data []byte) {
-	var commandsJson []common.Command
-	err := json.Unmarshal(data, &commandsJson)
+func getCommands(ctx context.Context, writer http.ResponseWriter, start time.Time, data []byte) {
+	var commandsJSON []common.Command
+	err := json.Unmarshal(data, &commandsJSON)
 	if err != nil {
-		utils.Error.Printf("Error unmarshalling commands: %v", err)
-		api.GenericResponse(w, http.StatusInternalServerError, HelpResponse{
+		logger.Error.Printf("Error unmarshalling commands: %v", err)
+		api.GenericResponse(writer, http.StatusInternalServerError, HelpResponse{
 			Data:   &[]common.Command{},
 			Errors: &[]common.ErrorMessage{{Message: "Error unmarshalling commands"}},
 		}, start)
 
 		return
 	}
-	filteredCommands := filterCommands(commandsJson)
+	filteredCommands := filterCommands(commandsJSON)
 
 	if len(filteredCommands) > 0 {
-		go setCache("website:commands", data)
+		go setCache(ctx, "website:commands", data)
 	}
 
-	api.GenericResponse(w, http.StatusOK, HelpResponse{
+	api.GenericResponse(writer, http.StatusOK, HelpResponse{
 		Data: &filteredCommands,
 	}, start)
 }
 
-func getCommandsHandler(w http.ResponseWriter, r *http.Request) {
+func getCommandsHandler(writer http.ResponseWriter, request *http.Request) {
 	start := time.Now()
 
-	cache, err := getCache(r.Context(), "website:commands")
+	cache, err := getCache(request.Context(), "website:commands")
 	if err == nil && cache != nil {
-		w.Header().Set("X-Cache-Hit", "HIT")
-		api.GenericResponse(w, http.StatusOK, HelpResponse{
+		writer.Header().Set("X-Cache-Hit", "HIT")
+		api.GenericResponse(writer, http.StatusOK, HelpResponse{
 			Data: cache,
 		}, start)
 
 		return
-	} else {
-		w.Header().Set("X-Cache-Hit", "MISS")
 	}
+	writer.Header().Set("X-Cache-Hit", "MISS")
 
 	response, err := utils.BridgeRequest(
-		r.Context(),
 		5*time.Second,
 		"get-commands",
 	)
 	if err != nil {
-		utils.Error.Printf("Error getting commands: %v", err)
-		api.GenericResponse(w, http.StatusInternalServerError, HelpResponse{
+		logger.Error.Printf("Error getting commands: %v", err)
+		api.GenericResponse(writer, http.StatusInternalServerError, HelpResponse{
 			Data:   &[]common.Command{},
 			Errors: &[]common.ErrorMessage{{Message: "Error getting commands"}},
 		}, start)
@@ -110,5 +127,5 @@ func getCommandsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getCommands(w, start, response)
+	getCommands(request.Context(), writer, start, response)
 }

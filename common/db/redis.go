@@ -1,23 +1,24 @@
+// Package db provides database clients and functions to retrieve or update data.
 package db
 
 import (
 	"context"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/redis/go-redis/v9"
-	"potat-api/common"
-	"potat-api/common/utils"
 )
 
+// RedisClient is a wrapper around the Redis client to provide a custom client.
 type RedisClient struct {
 	*redis.Client
 }
 
-var (
-	Redis       *redis.Client
-	RedisErrNil = redis.Nil
-)
+// ErrRedisNil is a constant for redis.Nil to handle nil responses from Redis.
+var ErrRedisNil = redis.Nil
 
-func InitRedis(config common.Config) error {
+// InitRedis initializes a Redis client using the provided configuration.
+func InitRedis(config common.Config) (*RedisClient, error) {
 	host := config.Redis.Host
 	if host == "" {
 		host = "localhost"
@@ -34,12 +35,11 @@ func InitRedis(config common.Config) error {
 		DB:       0,
 	}
 
-	Redis = redis.NewClient(options)
-
-	return nil
+	return &RedisClient{redis.NewClient(options)}, nil
 }
 
-func Scan(
+// Scan retrieves keys from Redis that match a given pattern using the SCAN command.
+func (r *RedisClient) Scan(
 	ctx context.Context,
 	match string,
 	count int64,
@@ -48,9 +48,9 @@ func Scan(
 	matches := make([]string, 0)
 
 	for cursor != 0 {
-		keys, next, err := Redis.Scan(ctx, cursor, match, count).Result()
+		keys, next, err := r.Client.Scan(ctx, cursor, match, count).Result()
 		if err != nil {
-			utils.Error.Println("Failed scanning keys", err)
+			logger.Error.Println("Failed scanning keys", err)
 
 			return nil, err
 		}

@@ -2,8 +2,6 @@ run:
   timeout: 5m
 
 linters-settings:
-  tagliatelle:
-
   govet:
     enable:
       - shadow

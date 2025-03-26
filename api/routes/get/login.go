@@ -1,40 +1,42 @@
+// Package get contains routes for http.MethodGet requests.
 package get
 
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"potat-api/api"
-	"potat-api/common"
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/api"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
+	"github.com/google/uuid"
 )
 
+//nolint:gosec,lll
 const (
 	twitchOauthURI   = "https://id.twitch.tv/oauth2/authorize"
 	twitchOauthToken = "https://id.twitch.tv/oauth2/token"
-	// TODO: load from config.
-	scopes = "channel:bot chat:read user:read:moderated_channels channel:manage:broadcast channel:manage:redemptions channel:read:subscriptions moderator:read:followers channel:read:hype_train channel:read:guest_star"
+	scopes           = "channel:bot chat:read user:read:moderated_channels channel:manage:broadcast channel:manage:redemptions channel:read:subscriptions moderator:read:followers channel:read:hype_train channel:read:guest_star"
 )
 
-var replyDeny sync.Map
+var replyDeny sync.Map //nolint:gochecknoglobals // Used to prevent replay attacks on the oauth flow.
 
 func init() {
 	api.SetRoute(api.Route{
 		Path:    "/login",
 		Method:  http.MethodGet,
 		Handler: twitchLoginHandler,
-	}, false)
+		UseAuth: false,
+	})
 }
 
 func setReplyDeny() string {
-	nonce := strconv.Itoa(rand.Int())
+	nonce := uuid.New().String()
 	replyDeny.Store(nonce, true)
 	go func(n string) {
 		time.Sleep(20 * time.Second)
@@ -44,18 +46,23 @@ func setReplyDeny() string {
 	return nonce
 }
 
-func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
+func handleErr(w http.ResponseWriter, start time.Time) {
+	if r := recover(); r != nil {
+		api.GenericResponse(w, http.StatusInternalServerError, common.GenericResponse[any]{
+			Data:   nil,
+			Errors: &[]common.ErrorMessage{{Message: "Internal Server Error"}},
+		}, start)
+	}
+}
+
+func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //nolint:cyclop
 	start := time.Now()
 
 	config := utils.LoadConfig()
 
-	defer func() {
-		if r := recover(); r != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-	}()
+	defer handleErr(writer, start)
 
-	query := r.URL.Query()
+	query := request.URL.Query()
 	code := query.Get("code")
 	state := query.Get("state")
 
@@ -72,50 +79,70 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 			"state":         {setReplyDeny()},
 		}.Encode()
 		uri := fmt.Sprintf("%s?%s", twitchOauthURI, params)
-		http.Redirect(w, r, uri, http.StatusFound)
+		http.Redirect(writer, request, uri, http.StatusFound)
 
 		return
 	}
 
 	// Disallow replay attacks
 	if _, ok := replyDeny.Load(state); !ok {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		http.Error(writer, "Forbidden", http.StatusForbidden)
 
 		return
 	}
 	replyDeny.Delete(state)
 
-	// Excahnge code for access token
-	tokenResp, err := http.PostForm(
+	data := url.Values{
+		"client_id":     {config.Twitch.ClientID},
+		"client_secret": {config.Twitch.ClientSecret},
+		"code":          {code},
+		"grant_type":    {"authorization_code"},
+		"redirect_uri":  {redirectURI},
+	}
+
+	req, err := http.NewRequestWithContext(
+		request.Context(),
+		http.MethodPost,
 		twitchOauthToken,
-		url.Values{
-			"client_id":     {config.Twitch.ClientID},
-			"client_secret": {config.Twitch.ClientSecret},
-			"code":          {code},
-			"grant_type":    {"authorization_code"},
-			"redirect_uri":  {redirectURI},
-		},
+		strings.NewReader(data.Encode()),
 	)
 	if err != nil {
-		http.Error(w, "Failed to get access token", http.StatusInternalServerError)
+		http.Error(writer, "Failed to create request", http.StatusInternalServerError)
 
 		return
 	}
-	defer tokenResp.Body.Close()
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	// Excahnge code for access token
+	tokenResp, err := client.Do(req)
+	if err != nil {
+		http.Error(writer, "Failed to get access token", http.StatusInternalServerError)
+
+		return
+	}
+	defer func() {
+		if err = tokenResp.Body.Close(); err != nil {
+			logger.Error.Println("Failed to close response body: ", err)
+		}
+	}()
 
 	var tokenData common.GenericOAUTHResponse
-	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenData); err != nil {
-		http.Error(w, "Failed to parse token response", http.StatusInternalServerError)
+	if err = json.NewDecoder(tokenResp.Body).Decode(&tokenData); err != nil {
+		http.Error(writer, "Failed to parse token response", http.StatusInternalServerError)
 
 		return
 	}
 
 	ok, validation, err := utils.ValidateHelixToken(
+		request.Context(),
 		tokenData.AccessToken,
 		false,
 	)
 	if err != nil || !ok || validation.UserID == "" {
-		api.GenericResponse(w, http.StatusUnauthorized, AuthorizedUserResponse{
+		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "Failed to validate access token"}},
 		}, start)
@@ -144,10 +171,10 @@ func twitchLoginHandler(w http.ResponseWriter, r *http.Request) {
 		string("token and stuff lol"),
 		strings.Replace(config.Twitch.OauthURI, "api.", "", 1),
 	)
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(html))
+	writer.Header().Set("Content-Type", "text/html")
+	writer.WriteHeader(http.StatusOK)
+	_, err = writer.Write([]byte(html))
 	if err != nil {
-		utils.Warn.Println("Failed to write document: ", err)
+		logger.Warn.Println("Failed to write document: ", err)
 	}
 }

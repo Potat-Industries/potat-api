@@ -1,50 +1,60 @@
+// Project: potat-api
+// Package main initializes the potat-api server and starts all the necessary components,
+// including Postgres, Redis, Clickhouse, NATS, and various API services.
+//
+// It also handles graceful shutdowns, flushing buffers before exiting.
 package main
 
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"potat-api/api"
-	_ "potat-api/api/routes/get"
-	_ "potat-api/api/routes/post"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/utils"
-	"potat-api/haste"
-	"potat-api/redirects"
-	"potat-api/socket"
-	"potat-api/uploader"
+	"github.com/Potat-Industries/potat-api/api"
+	_ "github.com/Potat-Industries/potat-api/api/routes/get"
+	_ "github.com/Potat-Industries/potat-api/api/routes/post"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/haste"
+	"github.com/Potat-Industries/potat-api/redirects"
+	"github.com/Potat-Industries/potat-api/socket"
+	"github.com/Potat-Industries/potat-api/uploader"
 )
 
-func main() {
-	utils.Info.Println("Starting Potat API...")
+var errPingTimeout = errors.New("ping timed out")
 
-	ctx := context.Background()
+func main() { //nolint:cyclop
+	logger.Info.Println("Starting Potat API...")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	config := utils.LoadConfig()
 
-	initPostgres(*config, ctx)
-
-	initRedis(*config, ctx)
-
-	if config.API.Enabled || config.Loops.Enabled {
-		initClickhouse(*config, ctx)
-	}
+	postgres := initPostgres(ctx, *config)
+	redis := initRedis(ctx, *config)
+	clickhouse := initClickhouse(ctx, *config)
 
 	var nats *utils.NatsClient
-	if config.RabbitMQ.Enabled {
+	if config.Nats.Enabled {
 		nats = initNats(ctx)
-		defer nats.Stop()
+		defer func() {
+			if err := nats.Client.Drain(); err != nil {
+				logger.Error.Panicln("Failed closing NATS connection", err)
+			}
+			logger.Warn.Println("NATS connection closed")
+		}()
 	}
 
-	if config.Loops.Enabled {
-		go db.StartLoops(*config, nats)
-	}
+	go db.StartLoops(ctx, *config, nats, postgres, clickhouse, redis)
 
-	utils.Info.Println("Startup complete, serving APIs...")
+	logger.Info.Println("Startup complete, serving APIs...")
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(
@@ -54,79 +64,89 @@ func main() {
 		syscall.SIGINT,
 	)
 
+	var metrics *utils.Metrics
+	metricsChan := make(chan error)
+	if config.Prometheus.Enabled {
+		var server *http.Server
+		metrics, server = utils.ObserveMetrics(*config)
+		go func() {
+			metricsChan <- server.ListenAndServe()
+		}()
+	} else {
+		metrics = &utils.Metrics{}
+	}
+
 	socketChan := make(chan error)
 	if config.Socket.Enabled {
 		go func() {
-			socketChan <- socket.StartServing(*config, nats)
+			socketChan <- socket.StartServing(*config, nats, metrics)
 		}()
 	}
 
 	hastebinChan := make(chan error)
 	if config.Haste.Enabled {
 		go func() {
-			hastebinChan <- haste.StartServing(*config)
+			hastebinChan <- haste.StartServing(ctx, *config, postgres, redis, metrics)
 		}()
 	}
 
 	redirectsChan := make(chan error)
 	if config.Redirects.Enabled {
 		go func() {
-			redirectsChan <- redirects.StartServing(*config)
-		}()
-	}
-
-	apiChan := make(chan error)
-	if config.API.Enabled {
-		go func() {
-			apiChan <- api.StartServing(*config)
-		}()
-	}
-
-	metricsChan := make(chan error)
-	if config.Prometheus.Enabled {
-		go func() {
-			metricsChan <- utils.ObserveMetrics(*config)
+			redirectsChan <- redirects.StartServing(ctx, *config, postgres, redis, metrics)
 		}()
 	}
 
 	uploaderChan := make(chan error)
 	if config.Uploader.Enabled {
 		go func() {
-			uploaderChan <- uploader.StartServing(*config)
+			uploaderChan <- uploader.StartServing(ctx, *config, postgres, redis, metrics)
+		}()
+	}
+
+	apiChan := make(chan error)
+	if config.API.Enabled {
+		go func() {
+			apiChan <- api.StartServing(*config, postgres, redis, clickhouse, metrics)
 		}()
 	}
 
 	select {
 	case err := <-hastebinChan:
-		utils.Error.Panicln("Hastebin server error! ", err)
+		logger.Error.Panicln("Hastebin server error! ", err)
 	case err := <-redirectsChan:
-		utils.Error.Panicln("Redirects server error! ", err)
+		logger.Error.Panicln("Redirects server error! ", err)
 	case err := <-apiChan:
-		utils.Error.Panicln("API server error! ", err)
+		logger.Error.Panicln("API server error! ", err)
 	case err := <-metricsChan:
-		utils.Error.Panicln("Metrics server error! ", err)
+		logger.Error.Panicln("Metrics server error! ", err)
 	case err := <-uploaderChan:
-		utils.Error.Panicln("Uploader server error! ", err)
+		logger.Error.Panicln("Uploader server error! ", err)
 	case err := <-socketChan:
-		utils.Error.Panicln("Socket server error! ", err)
+		logger.Error.Panicln("Socket server error! ", err)
 	case <-shutdownChan:
-		utils.Warn.Println("Shutdown requested...")
+		logger.Warn.Println("Shutdown requested...")
 	}
 
 	if config.API.Enabled {
-		db.Clickhouse.Close()
-		utils.Warn.Println("Clickhouse connection closed")
+		if err := clickhouse.Close(); err != nil {
+			logger.Error.Panicln("Failed closing Clickhouse connection", err)
+		}
+		logger.Warn.Println("Clickhouse connection closed")
 	}
 
-	db.Postgres.Pool.Close()
-	utils.Warn.Println("Postgres connection closed")
-	db.Redis.Close()
-	utils.Warn.Println("Redis connection closed")
+	if err := redis.Close(); err != nil {
+		logger.Error.Panicln("Failed closing Redis connection", err)
+	}
+	logger.Warn.Println("Redis connection closed")
+
+	postgres.Close()
+	logger.Warn.Println("Postgres connection closed")
 }
 
 func runWithTimeout(
-	f func(ctx context.Context) error,
 	ctx context.Context,
+	f func(ctx context.Context) error,
 ) error {
 	done := make(chan error, 1)
 
@@ -141,56 +161,66 @@ func runWithTimeout(
 		case err := <-done:
 			return err
 		case <-attemptCtx.Done():
-			utils.Warn.Println("Ping timed out, retrying...")
-			lastError = errors.New("ping timed out")
+			logger.Warn.Println("Ping timed out, retrying...")
+			lastError = errPingTimeout
 		}
 	}
 
 	return lastError
 }
 
-func initPostgres(config common.Config, ctx context.Context) {
-	err := db.InitPostgres(config)
+func initPostgres(ctx context.Context, config common.Config) *db.PostgresClient {
+	postgres, err := db.InitPostgres(ctx, config)
 	if err != nil {
-		utils.Error.Panicln("Failed initializing Postgres", err)
+		logger.Error.Panicln("Failed initializing Postgres", err)
 	}
-	err = runWithTimeout(db.Postgres.Ping, ctx)
+	err = runWithTimeout(ctx, postgres.Ping)
 	if err != nil {
-		utils.Error.Panicln("Failed pinging Postgres", err)
+		logger.Error.Panicln("Failed pinging Postgres", err)
 	}
-	utils.Info.Println("Postgres initialized")
+	logger.Info.Println("Postgres initialized")
+
+	return postgres
 }
 
-func initRedis(config common.Config, ctx context.Context) {
-	err := db.InitRedis(config)
+func initRedis(ctx context.Context, config common.Config) *db.RedisClient {
+	redis, err := db.InitRedis(config)
 	if err != nil {
-		utils.Error.Panicln("Failed initializing Redis", err)
+		logger.Error.Panicln("Failed initializing Redis", err)
 	}
 
-	err = db.Redis.Ping(ctx).Err()
+	err = redis.Ping(ctx).Err()
 	if err != nil {
-		utils.Error.Panicln("Failed pinging Redis", err)
+		logger.Error.Panicln("Failed pinging Redis", err)
 	}
-	utils.Info.Println("Redis initialized")
+	logger.Info.Println("Redis initialized")
+
+	return redis
 }
 
-func initClickhouse(config common.Config, ctx context.Context) {
-	err := db.InitClickhouse(config)
-	if err != nil {
-		utils.Error.Panicln("Failed initializing Clickhouse", err)
+func initClickhouse(ctx context.Context, config common.Config) *db.ClickhouseClient {
+	if !config.API.Enabled && !config.Loops.Enabled {
+		return nil
 	}
 
-	err = runWithTimeout(db.Clickhouse.Ping, ctx)
+	ch, err := db.InitClickhouse(config)
 	if err != nil {
-		utils.Error.Panicln("Failed pinging Clickhouse", err)
+		logger.Error.Panicln("Failed initializing Clickhouse", err)
 	}
-	utils.Info.Println("Clickhouse initialized")
+
+	err = runWithTimeout(ctx, ch.Ping)
+	if err != nil {
+		logger.Error.Panicln("Failed pinging Clickhouse", err)
+	}
+	logger.Info.Println("Clickhouse initialized")
+
+	return ch
 }
 
 func initNats(ctx context.Context) *utils.NatsClient {
 	nats, err := utils.CreateNatsBroker(ctx)
 	if err != nil {
-		utils.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
+		logger.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
 	}
 
 	return nats

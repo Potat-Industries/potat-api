@@ -1,68 +1,75 @@
+// Package middleware provides middleware for authenticating, logging, and rate limiting requests.
 package middleware
 
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/golang-jwt/jwt/v5"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/utils"
 )
 
-type UnauthorizedResponse = common.GenericResponse[string]
+var (
+	errUnexpectedSign = errors.New("unexpected signing method")
+	errInvalidToken   = errors.New("invalid token")
+)
 
+type unauthorizedResponse = common.GenericResponse[string]
+
+// AuthenticatedUser is the key for the authenticated user in the request context.
 type AuthenticatedUser string
 
-type PotatClaims struct {
+type potatClaims struct {
 	jwt.RegisteredClaims
 	UserID int `json:"user_id"`
 }
 
-var (
-	JWTSecret        []byte
-	unauthorizedFunc func(
-		w http.ResponseWriter,
-		status int,
-		response interface{},
-		start time.Time,
-	)
-)
-
-const AuthedUser = AuthenticatedUser("authenticated-user")
-
-func SetJWTSecret(s string) {
-	JWTSecret = []byte(s)
-}
-
-func SetUnauthorizedFunc(f func(
+type unauthFunc func(
 	w http.ResponseWriter,
 	status int,
 	response interface{},
 	start time.Time,
-),
-) {
-	unauthorizedFunc = f
+)
+
+// Authenticator provides middleware for authenticating requests.
+type Authenticator struct {
+	unauthorizedFunc unauthFunc
+	secret           []byte
 }
 
-func sendUnauthorized(w http.ResponseWriter) {
-	utils.Warn.Println("Unauthorized request")
-	unauthorizedFunc(w, http.StatusTeapot, UnauthorizedResponse{
+// AuthedUser is the key for the authenticated user in the request context.
+const AuthedUser = AuthenticatedUser("authenticated-user")
+
+// NewAuthenticator creates a new authenticator with the provided secret.
+func NewAuthenticator(secret string, unauthorizedFunc unauthFunc) *Authenticator {
+	return &Authenticator{
+		secret:           []byte(secret),
+		unauthorizedFunc: unauthorizedFunc,
+	}
+}
+
+func (a *Authenticator) sendUnauthorized(w http.ResponseWriter) {
+	logger.Warn.Println("Unauthorized request")
+	a.unauthorizedFunc(w, http.StatusTeapot, unauthorizedResponse{
 		Data:   &[]string{},
 		Errors: &[]common.ErrorMessage{{Message: "Unauthorized"}},
 	}, time.Now())
 }
 
-func SetStaticAuthMiddleware(secret string) func(http.Handler) http.Handler {
+// SetStaticAuthMiddleware returns a middleware that verifies the provided static auth key.
+func (a *Authenticator) SetStaticAuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := strings.Replace(r.Header.Get("Authorization"), "Bearer ", "", 1)
-			if !verifySimpleAuthKey(auth, secret) {
-				sendUnauthorized(w)
+			if !a.verifySimpleAuthKey(auth) {
+				a.sendUnauthorized(w)
 
 				return
 			}
@@ -71,43 +78,51 @@ func SetStaticAuthMiddleware(secret string) func(http.Handler) http.Handler {
 	}
 }
 
-func verifySimpleAuthKey(provided, possessed string) bool {
-	return subtle.ConstantTimeCompare([]byte(provided), []byte(possessed)) == 1
+func (a *Authenticator) verifySimpleAuthKey(provided string) bool {
+	return subtle.ConstantTimeCompare([]byte(provided), a.secret) == 1
 }
 
-func SetDynamicAuthMiddleware() func(http.Handler) http.Handler {
+// SetDynamicAuthMiddleware returns a middleware that verifies the provided dynamic auth token.
+func (a *Authenticator) SetDynamicAuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := r.Header.Get("Authorization")
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			token := request.Header.Get("Authorization")
 			if token == "" {
-				sendUnauthorized(w)
+				a.sendUnauthorized(writer)
 
 				return
 			}
 
-			ok, user := verifyDynamicAuth(token, r.Context())
+			ok, user := a.verifyDynamicAuth(request.Context(), token)
 			if !ok {
-				sendUnauthorized(w)
+				a.sendUnauthorized(writer)
 
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), AuthedUser, user)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			ctx := context.WithValue(request.Context(), AuthedUser, user)
+			next.ServeHTTP(writer, request.WithContext(ctx))
 		})
 	}
 }
 
-func verifyDynamicAuth(token string, ctx context.Context) (bool, *common.User) {
+func (a *Authenticator) verifyDynamicAuth(ctx context.Context, token string) (bool, *common.User) {
 	token = strings.Replace(token, "Bearer ", "", 1)
-	claims, err := verifyJWT(token)
+	claims, err := a.verifyJWT(token)
 	if err != nil {
 		return false, &common.User{}
 	}
 
-	user, err := db.Postgres.GetUserByInternalID(ctx, claims.UserID)
+	postgres, ok := ctx.Value(PostgresKey).(*db.PostgresClient)
+	if !ok {
+		logger.Error.Println("Postgres client not found in context")
+
+		return false, &common.User{}
+	}
+
+	user, err := postgres.GetUserByInternalID(ctx, claims.UserID)
 	if err != nil {
-		utils.Warn.Println("Error fetching authenticated user: ", err)
+		logger.Warn.Println("Error fetching authenticated user: ", err)
 
 		return false, &common.User{}
 	}
@@ -115,29 +130,30 @@ func verifyDynamicAuth(token string, ctx context.Context) (bool, *common.User) {
 	return true, user
 }
 
-func jwtKeyFunc(token *jwt.Token) (interface{}, error) {
+func (a *Authenticator) jwtKeyFunc(token *jwt.Token) (interface{}, error) {
 	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		return nil, fmt.Errorf("%w: unexpected signing method: %v", errUnexpectedSign, token.Header["alg"])
 	}
 
-	return JWTSecret, nil
+	return a.secret, nil
 }
 
-func verifyJWT(tokenString string) (*PotatClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &PotatClaims{}, jwtKeyFunc)
+func (a *Authenticator) verifyJWT(tokenString string) (*potatClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &potatClaims{}, a.jwtKeyFunc)
 	if err != nil {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(*PotatClaims); ok && token.Valid {
+	if claims, ok := token.Claims.(*potatClaims); ok && token.Valid {
 		return claims, nil
 	}
 
-	return nil, fmt.Errorf("invalid token")
+	return nil, errInvalidToken
 }
 
-func CreateJWT(userID int) (string, error) {
-	claims := PotatClaims{
+// CreateJWT creates a new JWT token for the provided user ID.
+func (a *Authenticator) CreateJWT(userID int) (string, error) {
+	claims := potatClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(183 * 24 * time.Hour)),
@@ -146,7 +162,7 @@ func CreateJWT(userID int) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	signedToken, err := token.SignedString(JWTSecret)
+	signedToken, err := token.SignedString(a.secret)
 	if err != nil {
 		return "", err
 	}

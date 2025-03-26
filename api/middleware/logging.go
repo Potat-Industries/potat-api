@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 )
 
 type loggingResponseWriter struct {
@@ -22,51 +23,55 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.headers = lrw.ResponseWriter.Header()
 }
 
-func LogRequest(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		startTime := time.Now()
+// LogRequest logs the request method, URI, status code, and duration of the request.
+func LogRequest(metrics *utils.Metrics) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			startTime := time.Now()
 
-		loggingRW := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			loggingRW := &loggingResponseWriter{ResponseWriter: writer, statusCode: http.StatusOK}
 
-		next.ServeHTTP(loggingRW, r)
+			next.ServeHTTP(loggingRW, request)
 
-		cachehit := loggingRW.headers.Get("X-Cache-Hit")
-		if cachehit == "" {
-			cachehit = "MISS"
-		}
+			cachehit := loggingRW.headers.Get("X-Cache-Hit")
+			if cachehit == "" {
+				cachehit = "MISS"
+			}
 
-		utils.ObserveInboundRequests(
-			r.Host,
-			r.RequestURI,
-			r.RemoteAddr,
-			r.Method,
-			strconv.Itoa(loggingRW.statusCode),
-			cachehit,
-		)
+			metrics.ObserveInboundRequests(
+				request.Host,
+				request.RequestURI,
+				request.RemoteAddr,
+				request.Method,
+				strconv.Itoa(loggingRW.statusCode),
+				cachehit,
+			)
 
-		// Ignore chatterino link resolver xd
-		agent := r.UserAgent()
-		if strings.HasPrefix(agent, "chatterino-api-cache") {
-			return
-		}
+			// Ignore chatterino link resolver xd
+			agent := request.UserAgent()
+			if strings.HasPrefix(agent, "chatterino-api-cache") {
+				return
+			}
 
-		line := fmt.Sprintf(
-			"Host: %s | %s %s | Cache %s | Status: %d | Duration: %v | User-Agent: %s",
-			r.Host,
-			r.Method,
-			r.RequestURI,
-			cachehit,
-			loggingRW.statusCode,
-			time.Since(startTime),
-			agent,
-		)
+			line := fmt.Sprintf(
+				"Host: %s | %s %s | Cache %s | Status: %d | Duration: %v | User-Agent: %s",
+				request.Host,
+				request.Method,
+				request.RequestURI,
+				cachehit,
+				loggingRW.statusCode,
+				time.Since(startTime),
+				agent,
+			)
 
-		if loggingRW.statusCode >= 500 {
-			utils.Error.Println(line)
-		} else if loggingRW.statusCode >= 400 && loggingRW.statusCode < 500 {
-			utils.Warn.Println(line)
-		} else {
-			utils.Debug.Println(line)
-		}
-	})
+			switch {
+			case loggingRW.statusCode >= 500:
+				logger.Error.Println(line)
+			case loggingRW.statusCode >= 400 && loggingRW.statusCode < 500:
+				logger.Warn.Println(line)
+			default:
+				logger.Debug.Println(line)
+			}
+		})
+	}
 }

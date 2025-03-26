@@ -1,40 +1,33 @@
 package socket
 
 import (
-	"errors"
 	"net/http"
+	"time"
 
-	"potat-api/common"
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 )
 
-type Hub struct {
-	clients    map[*Client]bool
+type hub struct {
+	clients    map[*client]bool
 	broadcast  chan []byte
-	register   chan *Client
-	unregister chan *Client
+	register   chan *client
+	unregister chan *client
+	metrics    *utils.Metrics
 }
 
-var hub *Hub
-
-func newHub() *Hub {
-	return &Hub{
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
-	}
-}
-
-func (h *Hub) run() {
+func (h *hub) run() {
 	for {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
+			h.metrics.GaugeSocketConnections(float64(len(h.clients)))
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+				h.metrics.GaugeSocketConnections(float64(len(h.clients)))
 			}
 		case message := <-h.broadcast:
 			for client := range h.clients {
@@ -43,28 +36,32 @@ func (h *Hub) run() {
 				default:
 					close(client.send)
 					delete(h.clients, client)
+					h.metrics.GaugeSocketConnections(float64(len(h.clients)))
 				}
 			}
 		}
 	}
 }
 
-func Send(message []byte) error {
-	if hub == nil {
-		return errors.New("hub is not initialized!")
-	}
-
-	if len(hub.clients) == 0 {
+func (h *hub) Send(message []byte) error {
+	if len(h.clients) == 0 {
 		return nil
 	}
 
-	hub.broadcast <- message
+	h.broadcast <- message
 
 	return nil
 }
 
-func StartServing(config common.Config, natsClient *utils.NatsClient) error {
-	hub = newHub()
+// StartServing will start the socket server on the configured port.
+func StartServing(config common.Config, natsclient *utils.NatsClient, metrics *utils.Metrics) error {
+	hub := &hub{
+		broadcast:  make(chan []byte),
+		register:   make(chan *client),
+		unregister: make(chan *client),
+		clients:    make(map[*client]bool),
+		metrics:    metrics,
+	}
 	go hub.run()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -72,9 +69,15 @@ func StartServing(config common.Config, natsClient *utils.NatsClient) error {
 	})
 
 	addr := config.Socket.Host + ":" + config.Socket.Port
-	utils.Info.Printf("Socket server listening on %s", addr)
+	logger.Info.Printf("Socket server listening on %s", addr)
 
-	natsClient.SetProxySocketFn(Send)
+	natsclient.SetProxySocketFn(hub.Send)
 
-	return http.ListenAndServe(addr, nil)
+	server := &http.Server{
+		Addr:         addr,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	return server.ListenAndServe()
 }

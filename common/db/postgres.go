@@ -1,23 +1,26 @@
+// Package db provides database clients and functions to retrieve or update data.
 package db
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec
 	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"potat-api/common"
-	"potat-api/common/utils"
 )
 
-type DB struct {
-	Pool *pgxpool.Pool
+// PostgresClient is a wrapper around the pgxpool.Pool to manage database connections and queries.
+type PostgresClient struct {
+	*pgxpool.Pool
 }
 
+// LoaderKey is used to identify a user or channel in the database.
 type LoaderKey struct {
 	ID       *int
 	UserID   *string
@@ -25,25 +28,25 @@ type LoaderKey struct {
 	Platform *string
 }
 
+// ErrPostgresNoRows is an alias for pgx.ErrNoRows to handle cases where no rows are returned from a query.
 var (
-	Postgres       *DB
-	PostgresNoRows = pgx.ErrNoRows
+	ErrPostgresNoRows = pgx.ErrNoRows
+	errInvalidType    = fmt.Errorf("invalid channel type")
 )
 
-func InitPostgres(config common.Config) error {
+// InitPostgres initializes a new Postgres client with the provided configuration.
+func InitPostgres(ctx context.Context, config common.Config) (*PostgresClient, error) {
 	dbConfig, err := loadConfig(config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	pool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	Postgres = &DB{Pool: pool}
-
-	return nil
+	return &PostgresClient{pool}, nil
 }
 
 func loadConfig(config common.Config) (*pgxpool.Config, error) {
@@ -78,7 +81,9 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) {
 
 	dbConfig, err := pgxpool.ParseConfig(constring)
 	if err != nil {
-		utils.Error.Panicln("Error parsing database config", err)
+		logger.Error.Panicln("Error parsing database config", err)
+
+		return nil, err
 	}
 
 	dbConfig.MaxConns = 32
@@ -91,18 +96,21 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) {
 	return dbConfig, nil
 }
 
-func (db *DB) CheckTableExists(createTable string) {
-	_, err := db.Pool.Exec(context.Background(), createTable)
+// CheckTableExists checks if a table exists in the database and creates it if it doesn't.
+func (db *PostgresClient) CheckTableExists(ctx context.Context, createTable string) {
+	_, err := db.Pool.Exec(ctx, createTable)
 	if err != nil {
-		utils.Error.Fatalf("Failed to create table: %v", err)
+		logger.Error.Fatalf("Failed to create table: %v", err)
 	}
 }
 
-func (db *DB) Ping(ctx context.Context) error {
+// Ping checks the connection to the database.
+func (db *PostgresClient) Ping(ctx context.Context) error {
 	return db.Pool.Ping(ctx)
 }
 
-func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User, error) {
+// GetUserByName retrieves a user by their username from the database.
+func (db *PostgresClient) GetUserByName(ctx context.Context, username string) (*common.User, error) {
 	query := `
 		SELECT
 				users.user_id,
@@ -114,8 +122,7 @@ func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User,
 				json_agg(uc) AS connections
 		FROM users
 		LEFT JOIN user_connections uc ON users.user_id = uc.user_id
-		WHERE uc.platform_username = $1
-		  AND uc.platform = 'TWITCH'
+		WHERE users.username = $1
 		GROUP BY users.user_id;
 	`
 
@@ -136,7 +143,8 @@ func (db *DB) GetUserByName(ctx context.Context, username string) (*common.User,
 	return &user, nil
 }
 
-func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*common.User, error) {
+// GetUserByInternalID retrieves a user by their internal ID from the database.
+func (db *PostgresClient) GetUserByInternalID(ctx context.Context, id int) (*common.User, error) {
 	query := `
 		SELECT
 			u.user_id,
@@ -169,7 +177,8 @@ func (db *DB) GetUserByInternalID(ctx context.Context, id int) (*common.User, er
 	return &user, nil
 }
 
-func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {
+// GetChannelBlocks retrieves all blocks for a given channel from the database.
+func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {
 	query := `
 		SELECT
 		  user_id
@@ -208,7 +217,8 @@ func (db *DB) GetChannelBlocks(ctx context.Context, channelID string) *[]common.
 	return &blocks
 }
 
-func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]common.ChannelCommand {
+// GetChannelCommands retrieves all custom channel commands for a given channel from the database.
+func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID string) *[]common.ChannelCommand {
 	query := `
 		SELECT
 			command_id,
@@ -281,100 +291,30 @@ func (db *DB) GetChannelCommands(ctx context.Context, channelID string) *[]commo
 	return &commands
 }
 
-func (db *DB) GetChannelByID(
-	ctx context.Context,
-	channelID string,
-	platform common.Platforms,
-) (*common.Channel, error) {
-	query := `
-	  SELECT
-		  c.channel_id,
-			c.username,
-			c.joined_at,
-			c.added_by,
-			c.platform,
-			c.settings,
-			c.editors,
-			c.ambassadors,
-			c.meta,
-			c.state
-		FROM channels c
-		WHERE channel_id = $1
-		AND platform = $2;
-	`
-
-	var channel common.Channel
-	err := db.Pool.QueryRow(ctx, query, channelID, platform).Scan(
-		&channel.ChannelID,
-		&channel.Username,
-		&channel.JoinedAt,
-		&channel.AddedBy,
-		&channel.Platform,
-		&channel.Settings,
-		&channel.Editors,
-		&channel.Ambassadors,
-		&channel.Meta,
-		&channel.State,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	var wg sync.WaitGroup
-
-	wg.Add(2)
-
-	var commands *[]common.ChannelCommand
-	go func() {
-		defer wg.Done()
-		cmds := db.GetChannelCommands(ctx, channel.ChannelID)
-		if cmds != nil {
-			commands = cmds
-		}
-	}()
-
-	var blocks []common.Block
-	go func() {
-		defer wg.Done()
-		bs := db.GetChannelBlocks(ctx, channel.ChannelID)
-		if bs != nil {
-			blocks = *bs
-		}
-	}()
-
-	wg.Wait()
-
-	if commands != nil {
-		channel.Commands = commands
-	} else {
-		channel.Commands = &[]common.ChannelCommand{}
-	}
-
-	if len(blocks) > 0 {
-		channel.Blocks = common.FilteredBlocks{
-			Users:    &[]common.Block{},
-			Commands: &[]common.Block{},
-		}
-
-		for _, block := range blocks {
-			if block.BlockType == common.UserBlock {
-				*channel.Blocks.Users = append(*channel.Blocks.Users, block)
-			} else if block.BlockType == common.CommandBlock {
-				*channel.Blocks.Commands = append(*channel.Blocks.Commands, block)
-			}
-		}
-	} else {
-		channel.Blocks = common.FilteredBlocks{}
-	}
-
-	return &channel, nil
-}
-
-func (db *DB) GetChannelByName(
+// GetChannelByName retrieves a channel by its username and platform from the database.
+func (db *PostgresClient) GetChannelByName(
 	ctx context.Context,
 	username string,
 	platform common.Platforms,
 ) (*common.Channel, error) {
+	return db.getChannelByType(ctx, username, platform, "NAME")
+}
+
+// GetChannelByID retrieves a channel by its ID and platform from the database.
+func (db *PostgresClient) GetChannelByID(
+	ctx context.Context,
+	channelID string,
+	platform common.Platforms,
+) (*common.Channel, error) {
+	return db.getChannelByType(ctx, channelID, platform, "ID")
+}
+
+func (db *PostgresClient) getChannelByType( //nolint:cyclop
+	ctx context.Context,
+	value string,
+	platform common.Platforms,
+	chanType string,
+) (*common.Channel, error) {
 	query := `
 	  SELECT
 		  c.channel_id,
@@ -388,12 +328,20 @@ func (db *DB) GetChannelByName(
 			c.meta,
 			c.state
 		FROM channels c
-		WHERE username = $1
-		AND platform = $2;
 	`
 
+	switch {
+	case chanType == "ID":
+		query += `WHERE c.channel_id = $1 `
+	case chanType == "NAME":
+		query += `WHERE c.username = $1 `
+	default:
+		return nil, errInvalidType
+	}
+	query += `AND platform = $2;`
+
 	var channel common.Channel
-	err := db.Pool.QueryRow(ctx, query, username, platform).Scan(
+	err := db.Pool.QueryRow(ctx, query, value, platform).Scan(
 		&channel.ChannelID,
 		&channel.Username,
 		&channel.JoinedAt,
@@ -459,7 +407,8 @@ func (db *DB) GetChannelByName(
 	return &channel, nil
 }
 
-func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.PotatoData, error) {
+// GetPotatoData retrieves potato data for a user from the database.
+func (db *PostgresClient) GetPotatoData(ctx context.Context, username string) (*common.PotatoData, error) {
 	query := `
 		SELECT
 			p.user_id,
@@ -504,7 +453,7 @@ func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.Potat
 
 	var data common.PotatoData
 
-	err := db.Pool.QueryRow(context.Background(), query, username).Scan(
+	err := db.Pool.QueryRow(ctx, query, username).Scan(
 		&data.ID,
 		&data.PotatoCount,
 		&data.PotatoPrestige,
@@ -547,9 +496,10 @@ func (db *DB) GetPotatoData(ctx context.Context, username string) (*common.Potat
 	return &data, nil
 }
 
-func (db *DB) BatchUserConections(
+// BatchUserConections retrieves user connections for a batch of user IDs from the database.
+func (db *PostgresClient) BatchUserConections(
 	ctx context.Context,
-	IDs []int,
+	ids []int,
 ) *map[int][]common.UserConnection {
 	query := `
 		SELECT
@@ -564,7 +514,7 @@ func (db *DB) BatchUserConections(
 		WHERE user_id = ANY($1::INT[])
 	`
 
-	rows, err := db.Pool.Query(ctx, query, IDs)
+	rows, err := db.Pool.Query(ctx, query, ids)
 	if err != nil {
 		return nil
 	}
@@ -593,11 +543,12 @@ func (db *DB) BatchUserConections(
 	return &users
 }
 
-func (db *DB) GetRedirectByKey(ctx context.Context, key string) (string, error) {
+// GetRedirectByKey retrieves a URL redirect from the database by its key.
+func (db *PostgresClient) GetRedirectByKey(ctx context.Context, key string) (string, error) {
 	query := `SELECT url FROM url_redirects WHERE key = $1`
 
 	var url string
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&url)
+	err := db.Pool.QueryRow(ctx, query, key).Scan(&url)
 	if err != nil {
 		return "", err
 	}
@@ -605,11 +556,12 @@ func (db *DB) GetRedirectByKey(ctx context.Context, key string) (string, error) 
 	return url, nil
 }
 
-func (db *DB) GetKeyByRedirect(ctx context.Context, url string) (string, error) {
+// GetKeyByRedirect retrieves the key associated with a given URL redirect from the database.
+func (db *PostgresClient) GetKeyByRedirect(ctx context.Context, url string) (string, error) {
 	query := `SELECT key FROM url_redirects WHERE url = $1`
 
 	var key string
-	err := Postgres.Pool.QueryRow(ctx, query, url).Scan(&key)
+	err := db.Pool.QueryRow(ctx, query, url).Scan(&key)
 	if err != nil {
 		return "", err
 	}
@@ -617,12 +569,13 @@ func (db *DB) GetKeyByRedirect(ctx context.Context, url string) (string, error) 
 	return key, nil
 }
 
-func (db *DB) RedirectExists(ctx context.Context, key string) bool {
+// RedirectExists checks if a URL redirect exists in the database by its key.
+func (db *PostgresClient) RedirectExists(ctx context.Context, key string) bool {
 	query := `SELECT EXISTS(SELECT 1 FROM url_redirects WHERE key = $1)`
 
 	var exists bool
 
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&exists)
+	err := db.Pool.QueryRow(ctx, query, key).Scan(&exists)
 	if err != nil {
 		return false
 	}
@@ -630,15 +583,17 @@ func (db *DB) RedirectExists(ctx context.Context, key string) bool {
 	return exists
 }
 
-func (db *DB) NewRedirect(ctx context.Context, key, url string) error {
+// NewRedirect inserts a new URL redirect into the database.
+func (db *PostgresClient) NewRedirect(ctx context.Context, key, url string) error {
 	query := `INSERT INTO url_redirects (key, url) VALUES ($1, $2)`
 
-	_, err := Postgres.Pool.Exec(ctx, query, key, url)
+	_, err := db.Pool.Exec(ctx, query, key, url)
 
 	return err
 }
 
-func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
+// GetHaste retrieves a hastebin text document from the database by its key.
+func (db *PostgresClient) GetHaste(ctx context.Context, key string) (string, error) {
 	query := `
 		UPDATE haste
 		SET access_count = access_count + 1
@@ -648,7 +603,7 @@ func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
 
 	var text string
 
-	err := Postgres.Pool.QueryRow(ctx, query, encode(key)).Scan(&text)
+	err := db.Pool.QueryRow(ctx, query, encode(key)).Scan(&text)
 	if err != nil {
 		return "", err
 	}
@@ -656,7 +611,8 @@ func (db *DB) GetHaste(ctx context.Context, key string) (string, error) {
 	return text, nil
 }
 
-func (db *DB) NewHaste(
+// NewHaste inserts a new compressed hastebin text document into the database.
+func (db *PostgresClient) NewHaste(
 	ctx context.Context,
 	key string,
 	text []byte,
@@ -668,19 +624,20 @@ func (db *DB) NewHaste(
 		ON CONFLICT (key) DO NOTHING;
 	`
 
-	_, err := Postgres.Pool.Exec(ctx, query, encode(key), text, source)
+	_, err := db.Pool.Exec(ctx, query, encode(key), text, source)
 
 	return err
 }
 
 func encode(data string) string {
-	hash := md5.New()
+	hash := md5.New() //nolint:gosec
 	hash.Write([]byte(data))
 
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
-func (db *DB) NewUpload(
+// NewUpload inserts a new file into the database and returns the creation timestamp.
+func (db *PostgresClient) NewUpload(
 	ctx context.Context,
 	key string,
 	file []byte,
@@ -693,9 +650,9 @@ func (db *DB) NewUpload(
 		RETURNING created_at;
 	`
 	var createdAt time.Time
-	err := Postgres.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
+	err := db.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
 	if err != nil {
-		utils.Error.Println("Error scanning upload", err)
+		logger.Error.Println("Error scanning upload", err)
 
 		return false, nil
 	}
@@ -703,7 +660,8 @@ func (db *DB) NewUpload(
 	return true, &createdAt
 }
 
-func (db *DB) GetFileByKey(
+// GetFileByKey retrieves a file from the database by its key.
+func (db *PostgresClient) GetFileByKey(
 	ctx context.Context,
 	key string,
 ) ([]byte, string, *string, *time.Time, error) {
@@ -718,7 +676,7 @@ func (db *DB) GetFileByKey(
 	var fileName *string
 	var createdAt time.Time
 
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(
+	err := db.Pool.QueryRow(ctx, query, key).Scan(
 		&content,
 		&mimeType,
 		&fileName,
@@ -731,7 +689,8 @@ func (db *DB) GetFileByKey(
 	return content, mimeType, fileName, &createdAt, nil
 }
 
-func (db *DB) DeleteFileByKey(
+// DeleteFileByKey deletes a file from the database by its key.
+func (db *PostgresClient) DeleteFileByKey(
 	ctx context.Context,
 	key string,
 ) bool {
@@ -740,12 +699,13 @@ func (db *DB) DeleteFileByKey(
 		WHERE key = $1
 	`
 
-	_, err := Postgres.Pool.Exec(ctx, query, key)
+	_, err := db.Pool.Exec(ctx, query, key)
 
 	return err == nil
 }
 
-func (db *DB) GetUploadCreatedAt(
+// GetUploadCreatedAt retrieves the creation timestamp of an upload by its key.
+func (db *PostgresClient) GetUploadCreatedAt(
 	ctx context.Context,
 	key string,
 ) (*time.Time, error) {
@@ -756,7 +716,7 @@ func (db *DB) GetUploadCreatedAt(
 	`
 
 	var createdAt time.Time
-	err := Postgres.Pool.QueryRow(ctx, query, key).Scan(&createdAt)
+	err := db.Pool.QueryRow(ctx, query, key).Scan(&createdAt)
 	if err != nil {
 		return nil, err
 	}

@@ -9,8 +9,21 @@ import (
 	"strings"
 )
 
+var (
+	errInvalidEmoteData     = errors.New("invalid emote data")
+	errInvalidEmoteProvider = errors.New("invalid emote provider")
+	errNoSetID              = errors.New("set id is required")
+	errInvalidStvEmote      = errors.New("invalid 7TV emote data")
+	errInvalidBttvEmote     = errors.New("invalid BTTV emote data")
+	errInvalidFfzEmote      = errors.New("invalid FFZ emote data")
+	errInvalidTwitchEmote   = errors.New("invalid Twitch emote data")
+	errMissingIDOrName      = errors.New("emote is missing id or name")
+)
+
+// EmoteType represents the type of emote, such as standard, global, or channel-specific.
 type EmoteType string
 
+//nolint:revive
 const (
 	EmoteTypeChannel   EmoteType = "CHANNEL"
 	EmoteTypeGlobal    EmoteType = "GLOBAL"
@@ -20,8 +33,10 @@ const (
 	EmoteTypeEmoji     EmoteType = "EMOJI"
 )
 
+// ConflictType represents the type of possible conflict on emote actions.
 type ConflictType string
 
+//nolint:revive
 const (
 	ConflictTypeExact            ConflictType = "exact"
 	ConflictTypeID               ConflictType = "id"
@@ -31,11 +46,13 @@ const (
 	ConflictTypeAlias            ConflictType = "alias"
 )
 
+// Conflict represents the conflicted emote and the type of conflict.
 type Conflict struct {
 	Emote *NormalEmote `json:"emote"`
 	Type  ConflictType `json:"type"`
 }
 
+// NormalEmote represents a normal emote with its properties and potential conflicts.
 type NormalEmote struct {
 	Conflict *Conflict `json:"conflict,omitempty"`
 	Alias    *string   `json:"alias,omitempty"`
@@ -52,6 +69,7 @@ type NormalEmote struct {
 	Animated bool      `json:"animated"`
 }
 
+// StvEmote represents a 7TV emote with its properties.
 type StvEmote struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -62,6 +80,7 @@ type StvEmote struct {
 	} `json:"data"`
 }
 
+// BttvEmote represents a BTTV emote with its properties.
 type BttvEmote struct {
 	ID           string `json:"id"`
 	Code         string `json:"code"`
@@ -69,12 +88,14 @@ type BttvEmote struct {
 	Animated     bool   `json:"animated"`
 }
 
+// FfzEmote represents a FFZ emote with its properties.
 type FfzEmote struct {
 	Name     string `json:"name"`
 	ID       int    `json:"id"`
 	Animated bool   `json:"animated"`
 }
 
+// TwitchEmote represents a Twitch emote with its properties.
 type TwitchEmote struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -84,7 +105,8 @@ type TwitchEmote struct {
 	Format []string `json:"format"`
 }
 
-func NewNormalEmote(
+// NewNormalEmote returns a normalized emote object based on the provided emote data and platform.
+func NewNormalEmote( //nolint:cyclop
 	emoteData interface{},
 	setID string,
 	provider Platforms,
@@ -95,14 +117,14 @@ func NewNormalEmote(
 	if setID == "" {
 		emote, ok := emoteData.(NormalEmote)
 		if !ok {
-			return nil, errors.New("invalid data for normal emote")
+			return nil, errInvalidEmoteData
 		}
 
 		if emote.SetID == "" {
-			return nil, errors.New("set id is required")
-		} else {
-			setID = emote.SetID
+			return nil, errNoSetID
 		}
+
+		setID = emote.SetID
 	}
 
 	emote := &NormalEmote{
@@ -117,7 +139,7 @@ func NewNormalEmote(
 	case "STV":
 		data, ok := emoteData.(StvEmote)
 		if !ok {
-			return nil, errors.New("invalid data for STV emote")
+			return nil, errInvalidStvEmote
 		}
 		emote.ID = data.ID
 		emote.Name = data.Data.Name
@@ -125,7 +147,7 @@ func NewNormalEmote(
 			emote.Alias = &data.Name
 		}
 		emote.Animated = data.Data.Animated
-		url, err := EmoteIdToURL(data.ID, provider, 4)
+		url, err := EmoteIDToURL(data.ID, provider, 4)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +156,7 @@ func NewNormalEmote(
 	case "BTTV":
 		data, ok := emoteData.(BttvEmote)
 		if !ok {
-			return nil, errors.New("invalid data for BTTV emote")
+			return nil, errInvalidBttvEmote
 		}
 		emote.ID = data.ID
 		emote.Name = data.CodeOriginal
@@ -142,7 +164,7 @@ func NewNormalEmote(
 			emote.Alias = &data.Code
 		}
 		emote.Animated = data.Animated
-		url, err := EmoteIdToURL(data.ID, provider, 4)
+		url, err := EmoteIDToURL(data.ID, provider, 4)
 		if err != nil {
 			return nil, err
 		}
@@ -151,12 +173,12 @@ func NewNormalEmote(
 	case "FFZ":
 		data, ok := emoteData.(FfzEmote)
 		if !ok {
-			return nil, errors.New("invalid data for FFZ emote")
+			return nil, errInvalidFfzEmote
 		}
 		emote.ID = fmt.Sprintf("%d", data.ID)
 		emote.Name = data.Name
 		emote.Animated = data.Animated
-		url, err := EmoteIdToURL(strconv.Itoa(data.ID), provider, 4)
+		url, err := EmoteIDToURL(strconv.Itoa(data.ID), provider, 4)
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +187,7 @@ func NewNormalEmote(
 	case "TWITCH":
 		data, ok := emoteData.(TwitchEmote)
 		if !ok {
-			return nil, errors.New("invalid data for Twitch emote")
+			return nil, errInvalidTwitchEmote
 		}
 		emote.ID = data.ID
 		emote.Name = data.Name
@@ -173,25 +195,28 @@ func NewNormalEmote(
 		emote.URL = &data.Images.URL4X
 
 	default:
-		return nil, errors.New("invalid normal emote provider provided")
+		return nil, errInvalidEmoteProvider
 	}
 
 	if emote.ID == "" || emote.Name == "" {
-		return nil, errors.New("emote is missing id or name")
+		return nil, errMissingIDOrName
 	}
 
 	return emote, nil
 }
 
-func IsObjectId(id string) bool {
+// IsObjectID checks if the provided string is a valid MongoDB ObjectId.
+func IsObjectID(id string) bool {
 	return regexp.MustCompile(`^[0-9a-fA-F]{24}$`).MatchString(id)
 }
 
+// IsULID checks if the provided string is a valid ULID (Universally Unique Lexicographically Sortable Identifier).
 func IsULID(id string) bool {
 	return regexp.MustCompile(`^[0-9A-HJ-NP-Z]{26}$`).MatchString(id)
 }
 
-func EmoteIdToURL(id string, provider Platforms, size uint8) (string, error) {
+// EmoteIDToURL generates the URL for an emote based on its ID, provider, and size.
+func EmoteIDToURL(id string, provider Platforms, size uint8) (string, error) {
 	if size < 1 {
 		size = 1
 	} else if size > 4 {
@@ -214,6 +239,6 @@ func EmoteIdToURL(id string, provider Platforms, size uint8) (string, error) {
 	case "kick":
 		return fmt.Sprintf("https://files.kick.com/emotes/%s/fullsize", id), nil
 	default:
-		return "", fmt.Errorf("emote provider not found: %s", provider)
+		return "", errInvalidEmoteProvider
 	}
 }

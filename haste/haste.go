@@ -1,3 +1,4 @@
+// Package haste provides a simple pastebin-like service for storing and retrieving files.
 package haste
 
 import (
@@ -9,15 +10,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/api/middleware"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 	"github.com/gorilla/mux"
-	"potat-api/api/middleware"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/utils"
 )
 
 const createTable = `
@@ -30,74 +31,73 @@ const createTable = `
 	);
 `
 
-var allowedTypes = []string{
-	"text/plain",
-	"text/markdown",
-	"text/x-markdown",
-	"application/json",
-}
-
-var (
-	keyLength int
+type hastebin struct {
 	server    *http.Server
 	router    *mux.Router
-)
+	postgres  *db.PostgresClient
+	redis     *db.RedisClient
+	keyLength int
+}
 
-func init() {
-	staticPath := loadStaticFilePath()
-	staticFiles := loadStaticFiles(staticPath)
+// StartServing will start the Haste server on the configured port.
+func StartServing(
+	ctx context.Context,
+	config common.Config,
+	postgres *db.PostgresClient,
+	redis *db.RedisClient,
+	metrics *utils.Metrics,
+) error {
+	if config.Haste.Host == "" || config.Haste.Port == "" {
+		logger.Error.Fatal("Config: Haste host and port must be set")
+	}
 
-	router = mux.NewRouter()
+	haste := hastebin{
+		keyLength: 6,
+		postgres:  postgres,
+		redis:     redis,
+	}
 
-	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
-	router.Use(middleware.LogRequest)
+	router := mux.NewRouter()
+
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute, redis)
+	router.Use(middleware.LogRequest(metrics))
 	router.Use(limiter)
 
-	router.HandleFunc("/raw/{id}", handleGetRaw).Methods(http.MethodGet)
-	router.HandleFunc("/documents", handlePost).Methods(http.MethodPost)
-	router.HandleFunc("/documents/{id}", handleGet).Methods(http.MethodGet)
+	staticPath := haste.loadStaticFilePath()
+	staticFiles := haste.loadStaticFiles(staticPath)
+
+	router.HandleFunc("/raw/{id}", haste.handleGetRaw).Methods(http.MethodGet)
+	router.HandleFunc("/documents", haste.handlePost).Methods(http.MethodPost)
+	router.HandleFunc("/documents/{id}", haste.handleGet).Methods(http.MethodGet)
 	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, exists := staticFiles[r.URL.Path]; !exists {
 			r.URL.Path = "/"
 		}
 		http.FileServer(http.Dir(staticPath)).ServeHTTP(w, r)
 	}).Methods(http.MethodGet)
-}
 
-func StartServing(config common.Config) error {
-	if config.Haste.Host == "" || config.Haste.Port == "" {
-		utils.Error.Fatal("Config: Haste host and port must be set")
-	}
-
-	if config.Haste.KeyLength != 0 {
-		keyLength = config.Haste.KeyLength
-	} else {
-		keyLength = 6
-	}
-
-	server = &http.Server{
+	haste.server = &http.Server{
 		Handler:      router,
 		Addr:         config.Haste.Host + ":" + config.Haste.Port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+	haste.router = router
 
-	db.Postgres.CheckTableExists(createTable)
-
-	utils.Info.Printf("Haste listening on %s", server.Addr)
-
-	return server.ListenAndServe()
-}
-
-func Stop() {
-	if err := server.Shutdown(context.Background()); err != nil {
-		utils.Error.Fatalf("Failed to shutdown server: %v", err)
+	if config.Haste.KeyLength != 0 {
+		haste.keyLength = config.Haste.KeyLength
 	}
+
+	haste.postgres.CheckTableExists(ctx, createTable)
+
+	logger.Info.Printf("Haste listening on %s", haste.server.Addr)
+
+	return haste.server.ListenAndServe()
 }
 
-func getRedis(ctx context.Context, key string) (string, error) {
-	data, err := db.Redis.Get(ctx, key).Result()
+func (h *hastebin) getRedis(ctx context.Context, key string) (string, error) {
+	data, err := h.redis.Get(ctx, key).Result()
 	if err != nil {
 		return "", err
 	}
@@ -105,30 +105,25 @@ func getRedis(ctx context.Context, key string) (string, error) {
 	return data, nil
 }
 
-func setRedis(key, data string) {
-	err := db.Redis.Set(context.Background(), key, data, 0).Err()
+func (h *hastebin) setRedis(ctx context.Context, key, data string) {
+	err := h.redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
-		utils.Warn.Printf("Failed to cache document: %v", err)
+		logger.Warn.Printf("Failed to cache document: %v", err)
 
 		return
 	}
-
-	err = db.Redis.Expire(context.Background(), key, time.Hour).Err()
-	if err != nil {
-		utils.Warn.Printf("Failed to cache document: %v", err)
-	}
 }
 
-func loadStaticFilePath() string {
+func (h *hastebin) loadStaticFilePath() string {
 	pwd, err := os.Getwd()
 	if err != nil {
-		utils.Error.Panic("Failed loading Haste static file path: ", err)
+		logger.Error.Panic("Failed loading Haste static file path: ", err)
 	}
 
 	return filepath.Join(pwd, "./haste/static")
 }
 
-func loadStaticFiles(staticPath string) map[string]bool {
+func (h *hastebin) loadStaticFiles(staticPath string) map[string]bool {
 	files := make(map[string]bool)
 
 	err := filepath.Walk(staticPath, func(path string, info os.FileInfo, err error) error {
@@ -144,56 +139,56 @@ func loadStaticFiles(staticPath string) map[string]bool {
 		return nil
 	})
 	if err != nil {
-		utils.Error.Fatalf("Failed to load static files: %v", err)
+		logger.Error.Fatalf("Failed to load static files: %v", err)
 	}
 
 	return files
 }
 
-func handleGet(w http.ResponseWriter, r *http.Request) {
-	key := mux.Vars(r)["id"]
+func (h *hastebin) handleGet(writer http.ResponseWriter, request *http.Request) {
+	key := mux.Vars(request)["id"]
 	if key == "" {
-		http.Error(w, "Key not provided", http.StatusBadRequest)
+		http.Error(writer, "Key not provided", http.StatusBadRequest)
 
 		return
 	}
 
-	cache, err := getRedis(r.Context(), key)
+	cache, err := h.getRedis(request.Context(), key)
 	if cache != "" && err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache-Hit", "HIT")
-		w.WriteHeader(http.StatusOK)
-		err = json.NewEncoder(w).Encode(map[string]string{"key": key, "data": cache})
+		writer.Header().Set("Content-Type", "application/json")
+		writer.Header().Set("X-Cache-Hit", "HIT")
+		writer.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(writer).Encode(map[string]string{"key": key, "data": cache})
 		if err != nil {
-			utils.Warn.Println("Failed to write document: ", err)
+			logger.Warn.Println("Failed to write document: ", err)
 		}
 
 		return
 	}
 
-	data, err := db.Postgres.GetHaste(r.Context(), key)
+	data, err := h.postgres.GetHaste(request.Context(), key)
 	if err != nil || data == "" {
-		utils.Warn.Printf("Failed to get document: %v", err)
-		http.Error(w, "Document not found", http.StatusNotFound)
+		logger.Warn.Printf("Failed to get document: %v", err)
+		http.Error(writer, "Document not found", http.StatusNotFound)
 
 		return
 	}
 
-	go setRedis(key, data)
+	go h.setRedis(request.Context(), key, data)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Cache-Hit", "MISS")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(map[string]string{"key": key, "data": data})
+	writer.Header().Set("Content-Type", "application/json")
+	writer.Header().Set("X-Cache-Hit", "MISS")
+	writer.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(writer).Encode(map[string]string{"key": key, "data": data})
 	if err != nil {
-		utils.Warn.Println("Failed to write document: ", err)
+		logger.Warn.Println("Failed to write document: ", err)
 	}
 }
 
-func handleGetRaw(w http.ResponseWriter, r *http.Request) {
-	key := mux.Vars(r)["id"]
+func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Request) {
+	key := mux.Vars(request)["id"]
 	if key == "" {
-		http.Error(w, "Key not provided", http.StatusBadRequest)
+		http.Error(writer, "Key not provided", http.StatusBadRequest)
 
 		return
 	}
@@ -202,110 +197,121 @@ func handleGetRaw(w http.ResponseWriter, r *http.Request) {
 		key = strings.Split(key, ".")[0]
 	}
 
-	cache, err := getRedis(r.Context(), key)
+	cache, err := h.getRedis(request.Context(), key)
 	if cache != "" && err == nil {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("X-Cache-Hit", "HIT")
-		w.WriteHeader(http.StatusOK)
-		_, err = w.Write([]byte(cache))
+		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		writer.Header().Set("X-Cache-Hit", "HIT")
+		writer.WriteHeader(http.StatusOK)
+		_, err = writer.Write([]byte(cache))
 		if err != nil {
-			utils.Warn.Println("Failed to write document: ", err)
+			logger.Warn.Println("Failed to write document: ", err)
 		}
 
 		return
 	}
 
-	data, err := db.Postgres.GetHaste(r.Context(), key)
+	data, err := h.postgres.GetHaste(request.Context(), key)
 	if err != nil || data == "" {
-		utils.Warn.Printf("Failed to get document: %v", err)
-		http.Error(w, "Document not found", http.StatusNotFound)
+		logger.Warn.Printf("Failed to get document: %v", err)
+		http.Error(writer, "Document not found", http.StatusNotFound)
 
 		return
 	}
 
-	go setRedis(key, data)
+	go h.setRedis(request.Context(), key, data)
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("X-Cache-Hit", "MISS")
-	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(data))
+	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	writer.Header().Set("X-Cache-Hit", "MISS")
+	writer.WriteHeader(http.StatusOK)
+	_, err = writer.Write([]byte(data))
 	if err != nil {
-		utils.Warn.Println("Failed to write document: ", err)
+		logger.Warn.Println("Failed to write document: ", err)
 	}
 }
 
-func handlePost(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
+func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request) {
+	err := request.ParseForm()
 	if err != nil {
-		http.Error(w, "Error parsing form", http.StatusBadRequest)
+		http.Error(writer, "Error parsing form", http.StatusBadRequest)
 
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(request.Body)
 	if err != nil {
-		utils.Warn.Println("Error reading request body: ", err)
-		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		logger.Warn.Println("Error reading request body: ", err)
+		http.Error(writer, "Error reading request body", http.StatusInternalServerError)
 
 		return
 	}
-	defer r.Body.Close()
+	defer func() {
+		if err = request.Body.Close(); err != nil {
+			logger.Warn.Println("Error closing hastebin request body: ", err)
+		}
+	}()
 
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
 	if err != nil {
-		utils.Warn.Println("Error parsing media type: ", err)
-		http.Error(w, "Invalid content type", http.StatusUnsupportedMediaType)
+		logger.Warn.Println("Error parsing media type: ", err)
+		http.Error(writer, "Invalid content type", http.StatusUnsupportedMediaType)
 
 		return
 	}
 
-	if !slices.Contains(allowedTypes, mediaType) {
-		utils.Warn.Println("Invalid media type: ", mediaType)
-		http.Error(w, "Invalid media type", http.StatusUnsupportedMediaType)
+	allowedTypes := map[string]bool{
+		"text/plain":       true,
+		"text/markdown":    true,
+		"text/x-markdown":  true,
+		"application/json": true,
+	}
+
+	if !allowedTypes[mediaType] {
+		logger.Warn.Println("Invalid media type: ", mediaType)
+		http.Error(writer, "Invalid media type", http.StatusUnsupportedMediaType)
 
 		return
 	}
 
 	if len(body) == 0 {
-		utils.Warn.Println("Empty body")
-		http.Error(w, "Length required", http.StatusLengthRequired)
+		logger.Warn.Println("Empty body")
+		http.Error(writer, "Length required", http.StatusLengthRequired)
 
 		return
 	}
 
-	key, err := chooseKey(r.Context())
+	key, err := h.chooseKey(request.Context())
 	if err != nil {
-		utils.Warn.Println("Failed to generate key: ", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		logger.Warn.Println("Failed to generate key: ", err)
+		http.Error(writer, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
 
-	err = db.Postgres.NewHaste(r.Context(), key, body, r.RemoteAddr)
+	err = h.postgres.NewHaste(request.Context(), key, body, request.RemoteAddr)
 	if err != nil {
-		utils.Warn.Println("Failed to save document: ", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		logger.Warn.Println("Failed to save document: ", err)
+		http.Error(writer, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(map[string]string{"key": key})
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(writer).Encode(map[string]string{"key": key})
 	if err != nil {
-		utils.Warn.Println("Failed to write response: ", err)
+		logger.Warn.Println("Failed to write response: ", err)
 	}
 }
 
-func chooseKey(ctx context.Context) (string, error) {
+func (h *hastebin) chooseKey(ctx context.Context) (string, error) {
 	for {
-		key, err := utils.RandomString(keyLength)
+		key, err := utils.RandomString(h.keyLength)
 		if err != nil {
 			return "", err
 		}
 
-		data, err := db.Postgres.GetHaste(ctx, key)
-		if err != nil && !errors.Is(err, db.PostgresNoRows) {
+		data, err := h.postgres.GetHaste(ctx, key)
+		if err != nil && !errors.Is(err, db.ErrPostgresNoRows) {
 			return "", err
 		}
 

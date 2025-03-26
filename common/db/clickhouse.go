@@ -1,3 +1,4 @@
+// Package db provides database clients and functions to retrieve or update data.
 package db
 
 import (
@@ -5,16 +6,20 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"potat-api/common"
-	"potat-api/common/utils"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
-var Clickhouse driver.Conn
+// ClickhouseClient is a wrapper around the ClickHouse driver.Conn to provide a custom client.
+type ClickhouseClient struct {
+	driver.Conn
+}
 
-func InitClickhouse(config common.Config) error {
+// InitClickhouse initializes a ClickHouse connection using the provided configuration.
+func InitClickhouse(config common.Config) (*ClickhouseClient, error) {
 	host := config.Clickhouse.Host
 	if host == "" {
-		host = "localhost"
+		host = "localhost" //nolint:goconst
 	}
 
 	port := config.Clickhouse.Port
@@ -30,15 +35,13 @@ func InitClickhouse(config common.Config) error {
 	options := &clickhouse.Options{
 		Addr:   []string{fmt.Sprintf("%s:%s", host, port)},
 		Auth:   clickhouse.Auth{Username: user, Password: config.Clickhouse.Password},
-		Debugf: utils.Debug.Printf,
+		Debugf: logger.Debug.Printf,
 	}
 
 	conn, err := clickhouse.Open(options)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	Clickhouse = conn
-
-	return nil
+	return &ClickhouseClient{conn}, nil
 }

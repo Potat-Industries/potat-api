@@ -1,3 +1,4 @@
+// Package redirects provides a public api to create short redirect urls.
 package redirects
 
 import (
@@ -7,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Potat-Industries/potat-api/api/middleware"
+	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
+	"github.com/Potat-Industries/potat-api/common/logger"
+	"github.com/Potat-Industries/potat-api/common/utils"
 	"github.com/gorilla/mux"
-	"potat-api/api/middleware"
-	"potat-api/common"
-	"potat-api/common/db"
-	"potat-api/common/utils"
 )
 
 const createTable = `
@@ -21,26 +23,37 @@ const createTable = `
 	);
 `
 
-var (
-	server *http.Server
-	router *mux.Router
-)
-
-func init() {
-	router = mux.NewRouter()
-
-	limiter := middleware.NewRateLimiter(100, 1*time.Minute)
-	router.Use(middleware.LogRequest)
-	router.Use(limiter)
-	router.HandleFunc("/{id}", getRedirect).Methods(http.MethodGet)
+type redirects struct {
+	server   *http.Server
+	postgres *db.PostgresClient
+	redis    *db.RedisClient
 }
 
-func StartServing(config common.Config) error {
+// StartServing will start the redirects server on the configured port.
+func StartServing(
+	ctx context.Context,
+	config common.Config,
+	postgres *db.PostgresClient,
+	redis *db.RedisClient,
+	metrics *utils.Metrics,
+) error {
 	if config.Redirects.Host == "" || config.Redirects.Port == "" {
-		utils.Error.Fatal("Config: Redirect host and port must be set")
+		logger.Error.Fatal("Config: Redirect host and port must be set")
 	}
 
-	server = &http.Server{
+	redirector := redirects{
+		postgres: postgres,
+		redis:    redis,
+	}
+
+	router := mux.NewRouter()
+
+	limiter := middleware.NewRateLimiter(100, 1*time.Minute, redis)
+	router.Use(middleware.LogRequest(metrics))
+	router.Use(limiter)
+	router.HandleFunc("/{id}", redirector.getRedirect).Methods(http.MethodGet)
+
+	redirector.server = &http.Server{
 		Handler:      router,
 		Addr:         config.Redirects.Host + ":" + config.Redirects.Port,
 		WriteTimeout: 15 * time.Second,
@@ -48,64 +61,57 @@ func StartServing(config common.Config) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	db.Postgres.CheckTableExists(createTable)
+	redirector.postgres.CheckTableExists(ctx, createTable)
 
-	utils.Info.Printf("Redirects listening on %s", server.Addr)
+	logger.Info.Printf("Redirects listening on %s", redirector.server.Addr)
 
-	return server.ListenAndServe()
+	return redirector.server.ListenAndServe()
 }
 
-func Stop() {
-	if err := server.Shutdown(context.Background()); err != nil {
-		utils.Error.Fatalf("Failed to shutdown server: %v", err)
-	}
-}
-
-func setRedis(key, data string) {
-	err := db.Redis.SetEx(context.Background(), key, data, time.Hour).Err()
+func (r *redirects) setRedis(ctx context.Context, key, data string) {
+	err := r.redis.SetEx(ctx, key, data, time.Hour).Err()
 	if err != nil {
-		utils.Error.Printf("Error caching redirect: %v", err)
+		logger.Error.Printf("Error caching redirect: %v", err)
 	}
 }
 
-func getRedis(ctx context.Context, key string) (string, error) {
-	data, err := db.Redis.Get(ctx, key).Result()
-	if err != nil && !errors.Is(err, db.RedisErrNil) {
+func (r *redirects) getRedis(ctx context.Context, key string) (string, error) {
+	data, err := r.redis.Get(ctx, key).Result()
+	if err != nil && !errors.Is(err, db.ErrRedisNil) {
 		return "", err
 	}
 
 	return data, nil
 }
 
-func getRedirect(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
 	key := vars["id"]
 	if key == "" {
-		http.NotFound(w, r)
+		http.NotFound(writer, request)
 
 		return
 	}
 
-	cache, err := getRedis(r.Context(), key)
+	cache, err := r.getRedis(request.Context(), key)
 	if err == nil && cache != "" {
-		w.Header().Set("X-Cache-Hit", "HIT")
-		http.Redirect(w, r, cache, http.StatusSeeOther)
+		writer.Header().Set("X-Cache-Hit", "HIT")
+		http.Redirect(writer, request, cache, http.StatusSeeOther)
 
 		return
-	} else {
-		w.Header().Set("X-Cache-Hit", "MISS")
 	}
+	writer.Header().Set("X-Cache-Hit", "MISS")
 
-	redirect, err := db.Postgres.GetRedirectByKey(r.Context(), key)
+	redirect, err := r.postgres.GetRedirectByKey(request.Context(), key)
 	if err != nil {
-		if errors.Is(err, db.PostgresNoRows) {
-			http.NotFound(w, r)
+		if errors.Is(err, db.ErrPostgresNoRows) {
+			http.NotFound(writer, request)
 
 			return
 		}
 
-		utils.Error.Printf("Error fetching redirect: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logger.Error.Printf("Error fetching redirect: %v", err)
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
 	}
@@ -114,8 +120,8 @@ func getRedirect(w http.ResponseWriter, r *http.Request) {
 		redirect = "https://" + redirect
 	}
 
-	go setRedis(key, redirect)
+	go r.setRedis(request.Context(), key, redirect)
 
-	r.Header.Set("X-Cache-Hit", "MISS")
-	http.Redirect(w, r, redirect, http.StatusSeeOther)
+	request.Header.Set("X-Cache-Hit", "MISS")
+	http.Redirect(writer, request, redirect, http.StatusSeeOther)
 }
