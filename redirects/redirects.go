@@ -84,6 +84,20 @@ func (r *redirects) getRedis(ctx context.Context, key string) (string, error) {
 	return data, nil
 }
 
+func (r *redirects) cleanRedirectProtocolSoLinksActuallyWork(url string) string {
+		if strings.HasPrefix(url, "https://") {
+			return url
+		}
+		if strings.HasPrefix(url, "http://") {
+			return "https://" + strings.TrimPrefix(url, "http://")
+		}
+		if strings.HasPrefix(url, "//") {
+			return "https:" + url
+		}
+
+		return "https://" + url
+}
+
 func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	key := vars["id"]
@@ -116,9 +130,7 @@ func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	if !strings.HasPrefix(redirect, "https://") {
-		redirect = "https://" + redirect
-	}
+	redirect = r.cleanRedirectProtocolSoLinksActuallyWork(redirect)
 
 	go r.setRedis(request.Context(), key, redirect)
 
