@@ -20,12 +20,12 @@ func TestRedirects__CheckProtocolFormatAfterProtocolReformat(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			cleanedUrl := redirector.cleanRedirectProtocolSoLinksActuallyWork(tc.input)
-			if !strings.HasPrefix(cleanedUrl, "https://") {
-				t.Errorf("Expected cleaned URL to start with 'https://', got %q", cleanedUrl)
+			cleanedURL := redirector.cleanRedirectProtocolSoLinksActuallyWork(tc.input)
+			if !strings.HasPrefix(cleanedURL, "https://") {
+				t.Errorf("Expected cleaned URL to start with 'https://', got %q", cleanedURL)
 			}
-			if cleanedUrl != tc.expected {
-				t.Errorf("Expected %q, got %q", tc.expected, cleanedUrl)
+			if cleanedURL != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, cleanedURL)
 			}
 		})
 	}

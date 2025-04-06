@@ -85,17 +85,17 @@ func (r *redirects) getRedis(ctx context.Context, key string) (string, error) {
 }
 
 func (r *redirects) cleanRedirectProtocolSoLinksActuallyWork(url string) string {
-		if strings.HasPrefix(url, "https://") {
-			return url
-		}
-		if strings.HasPrefix(url, "http://") {
-			return "https://" + strings.TrimPrefix(url, "http://")
-		}
-		if strings.HasPrefix(url, "//") {
-			return "https:" + url
-		}
+	if strings.HasPrefix(url, "https://") {
+		return url
+	}
+	if strings.HasPrefix(url, "http://") {
+		return "https://" + strings.TrimPrefix(url, "http://")
+	}
+	if strings.HasPrefix(url, "//") {
+		return "https:" + url
+	}
 
-		return "https://" + url
+	return "https://" + url
 }
 
 func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Request) {
@@ -132,7 +132,8 @@ func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Reques
 
 	redirect = r.cleanRedirectProtocolSoLinksActuallyWork(redirect)
 
-	go r.setRedis(request.Context(), key, redirect)
+	parentCtx := context.WithoutCancel(request.Context())
+	go r.setRedis(parentCtx, key, redirect)
 
 	request.Header.Set("X-Cache-Hit", "MISS")
 	http.Redirect(writer, request, redirect, http.StatusSeeOther)
