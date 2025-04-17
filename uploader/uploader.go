@@ -176,7 +176,8 @@ func (u *uploader) handleUpload(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	go u.setRedis(request.Context(), key, fileData)
+	parentCtx := context.WithoutCancel(request.Context())
+	go u.setRedis(parentCtx, key, fileData)
 
 	response := fmt.Sprintf("https://%s/%s", request.Host, key)
 	writer.Header().Set("Content-Type", "application/json")
@@ -254,7 +255,8 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 		return
 	}
 
-	go u.setRedis(request.Context(), key, data)
+	parentCtx := context.WithoutCancel(request.Context())
+	go u.setRedis(parentCtx, key, data)
 
 	if name != nil {
 		writer.Header().Set("Content-Disposition", "inline; filename=\""+*name+"\"")

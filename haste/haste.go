@@ -218,7 +218,8 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	go h.setRedis(request.Context(), key, data)
+	parentCtx := context.WithoutCancel(request.Context())
+	go h.setRedis(parentCtx, key, data)
 
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.Header().Set("X-Cache-Hit", "MISS")
