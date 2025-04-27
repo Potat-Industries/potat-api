@@ -251,6 +251,11 @@ func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request)
 		}
 	}()
 
+	contentType := request.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/json"
+	}
+
 	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
 	if err != nil {
 		logger.Warn.Println("Error parsing media type: ", err)
