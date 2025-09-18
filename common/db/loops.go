@@ -243,6 +243,13 @@ func updateColorView(ctx context.Context, clickhouse *ClickhouseClient) {
 func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
 	logger.Info.Println("Updating badge view")
 
+	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_badge_stats;`)
+	if err != nil {
+		logger.Error.Println("Error truncating badge stats table ", err)
+
+		return
+	}
+
 	query := `
 		INSERT INTO potatbotat.twitch_badge_stats
 		SELECT
@@ -250,7 +257,7 @@ func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
 			COUNT(DISTINCT user_id) AS user_count,
 			(user_count * 100.) / (
 				SELECT COUNT(user_id)
-				FROM potatbotat.twitch_badges
+				FROM potatbotat.twitch_badges FINAL
 			) AS percentage,
 			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank,
 			version
@@ -259,7 +266,7 @@ func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
 		GROUP BY badge, version;
 	`
 
-	err := clickhouse.Exec(ctx, query)
+	err = clickhouse.Exec(ctx, query)
 	if err != nil {
 		logger.Error.Println("Error updating badge view ", err)
 	}
