@@ -252,9 +252,11 @@ func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
 				SELECT COUNT(user_id)
 				FROM potatbotat.twitch_badges
 			) AS percentage,
-			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank
+			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank,
+			version
 		FROM potatbotat.twitch_badges FINAL
-		GROUP BY badge;
+		WHERE badge != ''
+		GROUP BY badge, version;
 	`
 
 	err := clickhouse.Exec(ctx, query)
