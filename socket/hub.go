@@ -2,6 +2,7 @@ package socket
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Potat-Industries/potat-api/common"
@@ -53,6 +54,11 @@ func (h *hub) Send(message []byte) error {
 	return nil
 }
 
+func isWebSocketRequest(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+}
+
 // StartServing will start the socket server on the configured port.
 func StartServing(config common.Config, natsclient *utils.NatsClient, metrics *utils.Metrics) error {
 	hub := &hub{
@@ -65,6 +71,12 @@ func StartServing(config common.Config, natsclient *utils.NatsClient, metrics *u
 	go hub.run()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if !isWebSocketRequest(r) {
+			http.Error(w, "Invalid protocol", http.StatusMethodNotAllowed)
+
+			return
+		}
+
 		serveWs(hub, w, r)
 	})
 

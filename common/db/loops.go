@@ -77,7 +77,7 @@ func StartLoops(
 	}
 	_, err = cronManager.AddFunc("*/5 * * * *", func() {
 		go updateColorView(ctx, clickhouse)
-		go updateBadgeView(ctx, clickhouse)
+		// go updateBadgeView(ctx, clickhouse)
 	})
 	if err != nil {
 		logger.Error.Println("Failed initializing cron updateColorView", err)
@@ -86,7 +86,7 @@ func StartLoops(
 	}
 	_, err = cronManager.AddFunc("0 */12 * * *", func() {
 		go backupPostgres(ctx, postgres, natsClient, config)
-		go optimizeClickhouse(ctx, config, clickhouse)
+		// go optimizeClickhouse(ctx, config, clickhouse)
 	})
 	if err != nil {
 		logger.Error.Println("Failed initializing cron backupPostgres", err)
@@ -240,37 +240,37 @@ func updateColorView(ctx context.Context, clickhouse *ClickhouseClient) {
 	}
 }
 
-func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
-	logger.Info.Println("Updating badge view")
+// func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
+// 	logger.Info.Println("Updating badge view")
 
-	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_badge_stats;`)
-	if err != nil {
-		logger.Error.Println("Error truncating badge stats table ", err)
+// 	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_badge_stats;`)
+// 	if err != nil {
+// 		logger.Error.Println("Error truncating badge stats table ", err)
 
-		return
-	}
+// 		return
+// 	}
 
-	query := `
-		INSERT INTO potatbotat.twitch_badge_stats
-		SELECT
-			badge,
-			COUNT(DISTINCT user_id) AS user_count,
-			(user_count * 100.) / (
-				SELECT COUNT(user_id)
-				FROM potatbotat.twitch_badges FINAL
-			) AS percentage,
-			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank,
-			version
-		FROM potatbotat.twitch_badges FINAL
-		WHERE badge != ''
-		GROUP BY badge, version;
-	`
+// 	query := `
+// 		INSERT INTO potatbotat.twitch_badge_stats
+// 		SELECT
+// 			badge,
+// 			COUNT(DISTINCT user_id) AS user_count,
+// 			(user_count * 100.) / (
+// 				SELECT COUNT(user_id)
+// 				FROM potatbotat.twitch_badges FINAL
+// 			) AS percentage,
+// 			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank,
+// 			version
+// 		FROM potatbotat.twitch_badges FINAL
+// 		WHERE badge != ''
+// 		GROUP BY badge, version;
+// 	`
 
-	err = clickhouse.Exec(ctx, query)
-	if err != nil {
-		logger.Error.Println("Error updating badge view ", err)
-	}
-}
+// 	err = clickhouse.Exec(ctx, query)
+// 	if err != nil {
+// 		logger.Error.Println("Error updating badge view ", err)
+// 	}
+// }
 
 func upsertOAuthToken(
 	ctx context.Context,
@@ -635,46 +635,46 @@ func getDatabaseSize(ctx context.Context, postgres *PostgresClient, dbName strin
 	return "", errNoRows
 }
 
-func optimizeClickhouse(ctx context.Context, config common.Config, clickhouse *ClickhouseClient) {
-	// offset any concurrent crons
-	time.Sleep(5 * time.Minute)
+// func optimizeClickhouse(ctx context.Context, config common.Config, clickhouse *ClickhouseClient) {
+// 	// offset any concurrent crons
+// 	time.Sleep(5 * time.Minute)
 
-	logger.Info.Println("Optimizing Clickhouse tables")
+// 	logger.Info.Println("Optimizing Clickhouse tables")
 
-	if config.Clickhouse.Database == "" {
-		logger.Error.Println("Clickhouse database is not configured")
+// 	if config.Clickhouse.Database == "" {
+// 		logger.Error.Println("Clickhouse database is not configured")
 
-		return
-	}
+// 		return
+// 	}
 
-	query := `SELECT table FROM system.tables WHERE database = ?`
+// 	query := `SELECT table FROM system.tables WHERE database = ?`
 
-	rows, err := clickhouse.Query(ctx, query, config.Clickhouse.Database)
-	if err != nil {
-		logger.Error.Println("Failed to query Clickhouse tables:", err)
+// 	rows, err := clickhouse.Query(ctx, query, config.Clickhouse.Database)
+// 	if err != nil {
+// 		logger.Error.Println("Failed to query Clickhouse tables:", err)
 
-		return
-	}
+// 		return
+// 	}
 
-	for rows.Next() {
-		var table string
-		if err := rows.Scan(&table); err != nil {
-			logger.Error.Println("Failed to scan Clickhouse table:", err)
+// 	for rows.Next() {
+// 		var table string
+// 		if err := rows.Scan(&table); err != nil {
+// 			logger.Error.Println("Failed to scan Clickhouse table:", err)
 
-			continue
-		}
+// 			continue
+// 		}
 
-		query := fmt.Sprintf("OPTIMIZE TABLE %s.%s FINAL", config.Clickhouse.Database, table)
-		if err := clickhouse.Exec(ctx, query); err != nil {
-			logger.Error.Println("Failed to optimize Clickhouse table:", err)
-		}
+// 		query := fmt.Sprintf("OPTIMIZE TABLE %s.%s FINAL", config.Clickhouse.Database, table)
+// 		if err := clickhouse.Exec(ctx, query); err != nil {
+// 			logger.Error.Println("Failed to optimize Clickhouse table:", err)
+// 		}
 
-		logger.Info.Printf(
-			"Optimized Clickhouse table %s.%s",
-			config.Clickhouse.Database,
-			table,
-		)
+// 		logger.Info.Printf(
+// 			"Optimized Clickhouse table %s.%s",
+// 			config.Clickhouse.Database,
+// 			table,
+// 		)
 
-		time.Sleep(5 * time.Second)
-	}
-}
+// 		time.Sleep(5 * time.Second)
+// 	}
+// }
