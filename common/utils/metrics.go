@@ -58,17 +58,21 @@ func ObserveMetrics(config common.Config) (*Metrics, *http.Server) {
 
 // ObserveInboundRequests increments the counter for inbound requests to bot endpoints.
 func (m *Metrics) ObserveInboundRequests(host, endpoint, ip, method, status, cachehit string) {
-	m.httpRequestCounter.WithLabelValues(
-		host,
-		endpoint,
-		ip,
-		method,
-		status,
-		cachehit,
-	).Inc()
+	if m.httpRequestCounter != nil {
+		m.httpRequestCounter.WithLabelValues(
+			host,
+			endpoint,
+			ip,
+			method,
+			status,
+			cachehit,
+		).Inc()
+	}
 }
 
 // GaugeSocketConnections is a gauge to track the number of active socket connections.
 func (m *Metrics) GaugeSocketConnections(value float64) {
-	m.socketGauge.Set(value)
+	if m.socketGauge != nil {
+		m.socketGauge.Set(value)
+	}
 }
