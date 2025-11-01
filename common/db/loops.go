@@ -75,12 +75,14 @@ func StartLoops(
 
 		return
 	}
-	_, err = cronManager.AddFunc("*/5 * * * *", func() {
-		go updateColorView(ctx, clickhouse)
-		// go updateBadgeView(ctx, clickhouse)
+	_, err = cronManager.AddFunc("*/15 * * * *", func() {
+		updateColorView(ctx, clickhouse)
+		updateActiveBadgeView(ctx, clickhouse)
+		updateOwnedBadgeView(ctx, clickhouse)
+		updateUserOwnedBadgeView(ctx, clickhouse)
 	})
 	if err != nil {
-		logger.Error.Println("Failed initializing cron updateColorView", err)
+		logger.Error.Println("Failed initializing cron clickhouse views", err)
 
 		return
 	}
@@ -240,37 +242,104 @@ func updateColorView(ctx context.Context, clickhouse *ClickhouseClient) {
 	}
 }
 
-// func updateBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
-// 	logger.Info.Println("Updating badge view")
+func updateActiveBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
+	logger.Info.Println("Updating active badge view")
 
-// 	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_badge_stats;`)
-// 	if err != nil {
-// 		logger.Error.Println("Error truncating badge stats table ", err)
+	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_active_badge_stats;`)
+	if err != nil {
+		logger.Error.Println("Error truncating badge stats table ", err)
 
-// 		return
-// 	}
+		return
+	}
 
-// 	query := `
-// 		INSERT INTO potatbotat.twitch_badge_stats
-// 		SELECT
-// 			badge,
-// 			COUNT(DISTINCT user_id) AS user_count,
-// 			(user_count * 100.) / (
-// 				SELECT COUNT(user_id)
-// 				FROM potatbotat.twitch_badges FINAL
-// 			) AS percentage,
-// 			ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT user_id) DESC) AS rank,
-// 			version
-// 		FROM potatbotat.twitch_badges FINAL
-// 		WHERE badge != ''
-// 		GROUP BY badge, version;
-// 	`
+	query := `
+	  INSERT INTO potatbotat.twitch_active_badge_stats
+		SELECT
+			badge,
+			count(user_id) AS user_count,
+			version
+		FROM potatbotat.twitch_badges
+		WHERE badge NOT IN ('', 'NOBADGE')
+		GROUP BY (badge, version);
+	`
 
-// 	err = clickhouse.Exec(ctx, query)
-// 	if err != nil {
-// 		logger.Error.Println("Error updating badge view ", err)
-// 	}
-// }
+	err = clickhouse.Exec(ctx, query)
+	if err != nil {
+		logger.Error.Println("Error updating badge view ", err)
+	}
+}
+
+func updateOwnedBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
+	logger.Info.Println("Updating owned badge view")
+
+	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_owned_badge_stats;`)
+	if err != nil {
+		logger.Error.Println("Error truncating badge stats table ", err)
+
+		return
+	}
+
+	// Insert owned badges from active table first
+	prepare := `
+	  INSERT INTO potatbotat.twitch_owned_badges
+		SELECT
+			badge,
+			user_id,
+			version
+		FROM potatbotat.twitch_badges
+		WHERE badge NOT IN ('', 'NOBADGE')
+	`
+
+	err = clickhouse.Exec(ctx, prepare)
+	if err != nil {
+		logger.Error.Println("Error preparing badge view ", err)
+	}
+
+	query := `
+	  INSERT INTO potatbotat.twitch_owned_badge_stats
+		SELECT
+			badge,
+			count(user_id) AS user_count,
+			version
+		FROM potatbotat.twitch_owned_badges
+		WHERE badge NOT IN ('', 'NOBADGE')
+		GROUP BY (badge, version);
+	`
+
+	err = clickhouse.Exec(ctx, query)
+	if err != nil {
+		logger.Error.Println("Error updating badge view ", err)
+	}
+}
+
+func updateUserOwnedBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
+	logger.Info.Println("Updating user owned badge view")
+
+	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_owned_badge_user_stats;`)
+	if err != nil {
+		logger.Error.Println("Error truncating badge stats table ", err)
+
+		return
+	}
+
+	query := `
+	  INSERT INTO potatbotat.twitch_owned_badge_user_stats
+		SELECT
+			user_id,
+			count(badge) AS badge_count,
+  	  groupArrayDistinct(badge) AS badges
+		FROM potatbotat.twitch_owned_badges FINAL
+		WHERE badge NOT IN ('', 'NOBADGE')
+		GROUP BY user_id
+		HAVING uniqExact(badge) >= 5
+		ORDER BY badge_count DESC;
+	`
+
+	err = clickhouse.Exec(ctx, query)
+	if err != nil {
+		logger.Error.Println("Error updating user owned badge view ", err)
+	}
+}
 
 func upsertOAuthToken(
 	ctx context.Context,

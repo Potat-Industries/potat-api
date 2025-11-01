@@ -1,4 +1,3 @@
-
 // Package redirects provides a public api to create short redirect urls.
 package redirects
 

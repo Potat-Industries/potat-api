@@ -230,6 +230,7 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 	}
 }
 
+// nolint:cyclop
 func (h *hastebin) handlePost(writer http.ResponseWriter, request *http.Request) {
 	err := request.ParseForm()
 	if err != nil {
