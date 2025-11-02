@@ -273,22 +273,22 @@ func updateOwnedBadgeView(ctx context.Context, clickhouse *ClickhouseClient) {
 	logger.Info.Println("Updating owned badge view")
 
 	// Insert owned badges from active table first
-	prepare := `
-	  INSERT INTO potatbotat.twitch_owned_badges
-		SELECT
-			badge,
-			user_id,
-			version
-		FROM potatbotat.twitch_badges
-		WHERE badge NOT IN ('', 'NOBADGE')
-	`
+	// prepare := `
+	//   INSERT INTO potatbotat.twitch_owned_badges
+	// 	SELECT
+	// 		badge,
+	// 		user_id,
+	// 		version
+	// 	FROM potatbotat.twitch_badges
+	// 	WHERE badge NOT IN ('', 'NOBADGE')
+	// `
 
-	err := clickhouse.Exec(ctx, prepare)
-	if err != nil {
-		logger.Error.Println("Error preparing badge view ", err)
-	}
+	// err := clickhouse.Exec(ctx, prepare)
+	// if err != nil {
+	// 	logger.Error.Println("Error preparing badge view ", err)
+	// }
 
-	err = clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_owned_badge_stats;`)
+	err := clickhouse.Exec(ctx, `TRUNCATE TABLE potatbotat.twitch_owned_badge_stats;`)
 	if err != nil {
 		logger.Error.Println("Error truncating badge stats table ", err)
 
