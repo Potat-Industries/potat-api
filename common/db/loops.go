@@ -75,7 +75,7 @@ func StartLoops(
 
 		return
 	}
-	_, err = cronManager.AddFunc("*/15 * * * *", func() {
+	_, err = cronManager.AddFunc("*/30 * * * *", func() {
 		updateColorView(ctx, clickhouse)
 		updateActiveBadgeView(ctx, clickhouse)
 		updateOwnedBadgeView(ctx, clickhouse)
