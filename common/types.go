@@ -15,6 +15,12 @@ const (
 	DISCORD Platforms = "DISCORD"
 	KICK    Platforms = "KICK"
 	STV     Platforms = "STV"
+	SPOTIFY Platforms = "SPOTIFY"
+	ANILIST Platforms = "ANILIST"
+	TRAKT   Platforms = "TRAKT"
+	FFZ     Platforms = "FFZ"
+	BTTV    Platforms = "BTTV"
+	STEAM   Platforms = "STEAM"
 )
 
 // PermissionLevel represents the permission level of a user interally with the api and bot.
@@ -147,36 +153,47 @@ type AddedByData struct {
 // ChannelSettings represents the settings for a channel, including bot settings, cooldowns, language,
 // permission levels, and other configurations.
 type ChannelSettings struct {
-	PajBot            *string  `json:"paj_bot,omitempty"`
-	UserCooldown      *int     `json:"user_cooldown,omitempty"`
-	ChannelCooldown   *int     `json:"channel_cooldown,omitempty"`
-	Language          string   `json:"language"`
-	Permission        string   `json:"permission"`
-	Prefix            string   `json:"prefix"`
-	UsersBlacklisted  []string `json:"users_blacklisted"`
-	NoReply           bool     `json:"no_reply"`
-	FirstMsgResponses bool     `json:"first_msg_responses"`
-	WhisperOnly       bool     `json:"whisper_only"`
-	OfflineOnly       bool     `json:"offline_only"`
-	ForceLanguage     bool     `json:"force_language"`
-	SilentErrors      bool     `json:"silent_errors"`
-	ColorResponses    bool     `json:"color_responses"`
+	PajBot                 *string  `json:"paj_bot,omitempty"`
+	UserCooldown           *int     `json:"user_cooldown,omitempty"`
+	ChannelCooldown        *int     `json:"channel_cooldown,omitempty"`
+	OnlinePermission       *string  `json:"online_permission,omitempty"`
+	EmoteStreakResponse    *string  `json:"emote_streak_response,omitempty"`
+	PyramidResponse        *string  `json:"pyramid_response,omitempty"`
+	OnlineSilentErrors     *bool    `json:"online_silent_errors,omitempty"`
+	OnlineWhisperOnly      *bool    `json:"online_whisper_only,omitempty"`
+	AllowBotEmoteTracking  *bool    `json:"allow_bot_emote_tracking,omitempty"`
+	IgnoreDropped          *bool    `json:"ignore_dropped,omitempty"`
+	NoLinks                *bool    `json:"no_links,omitempty"`
+	ForcePyramidNotVerbose *bool    `json:"force_potato_not_verbose,omitempty"`
+	Language               string   `json:"language"`
+	Permission             string   `json:"permission"`
+	Prefix                 string   `json:"prefix"`
+	UsersBlacklisted       []string `json:"users_blacklisted"`
+	NoReply                bool     `json:"no_reply"`
+	FirstMsgResponses      bool     `json:"first_msg_responses"`
+	WhisperOnly            bool     `json:"whisper_only"`
+	OfflineOnly            bool     `json:"offline_only"`
+	ForceLanguage          bool     `json:"force_language"`
+	SilentErrors           bool     `json:"silent_errors"`
+	ColorResponses         bool     `json:"color_responses"`
 }
 
 // CommandSettings represents the settings for a command in a channel, including its permissions, cooldowns,
 // and usage limits.
 type CommandSettings struct {
-	ChannelID        string   `json:"channel_id"`
-	Command          string   `json:"command"`
-	Permission       string   `json:"permission"`
-	UsersBlacklisted []string `json:"users_blacklisted"`
-	UsersWhitelisted []string `json:"users_whitelisted"`
-	CustomCooldown   int      `json:"custom_cooldown"`
-	ChannelUsage     int      `json:"channel_usage"`
-	IsEnabled        bool     `json:"is_enabled"`
-	OfflineOnly      bool     `json:"offline_only"`
-	SilentErrors     bool     `json:"silent_errors"`
-	AllowBots        bool     `json:"allow_bots"`
+	ChannelID         string   `json:"channel_id"`
+	Command           string   `json:"command"`
+	Permission        *string  `json:"permission,omitempty"`
+	UsersBlacklisted  []string `json:"users_blacklisted,omitempty"`
+	UsersWhitelisted  []string `json:"users_whitelisted,omitempty"`
+	CustomCooldown    *int     `json:"custom_cooldown,omitempty"`
+	ChannelUsage      int      `json:"channel_usage"`
+	IsEnabled         bool     `json:"is_enabled"`
+	OfflineOnly       *bool    `json:"offline_only,omitempty"`
+	SilentErrors      bool     `json:"silent_errors"`
+	AllowBots         *bool    `json:"allow_bots,omitempty"`
+	Platform          string   `json:"platform"`
+	AmbassadorGranted bool     `json:"ambassador_granted"`
 }
 
 // PlatformOauth represents the OAuth token and metadata for a user on a specific platform, including.
@@ -400,3 +417,62 @@ const (
 	BotVIP  BotCommandRequirements = "VIP"
 	BotMod  BotCommandRequirements = "MOD"
 )
+
+// ChannelListItem is a lightweight channel representation used for list endpoints (e.g. nav search).
+type ChannelListItem struct {
+	ChannelID string    `json:"channel_id"`
+	Username  string    `json:"username"`
+	Platform  Platforms `json:"platform"`
+	State     string    `json:"state"`
+}
+
+// EmoteStat represents an aggregated emote usage entry from Clickhouse.
+type EmoteStat struct {
+	EmoteID    string `json:"emote_id"`
+	EmoteName  string `json:"emote_name"`
+	EmoteAlias string `json:"emote_alias"`
+	Provider   string `json:"provider"`
+	Count      int64  `json:"count"`
+}
+
+// EmoteHistoryEntry represents a single per-user emote usage record from Clickhouse.
+type EmoteHistoryEntry struct {
+	EmoteID    string    `json:"emote_id"`
+	EmoteName  string    `json:"emote_name"`
+	EmoteAlias string    `json:"emote_alias"`
+	Provider   string    `json:"provider"`
+	ChannelID  string    `json:"channel_id"`
+	UserID     string    `json:"user_id"`
+	Count      int64     `json:"count"`
+	UsedAt     time.Time `json:"used_at"`
+}
+
+// PageInfo contains cursor-based pagination metadata.
+type PageInfo struct {
+	HasNextPage bool   `json:"hasNextPage"`
+	Cursor      string `json:"cursor"`
+}
+
+// EmoteStatsResponse is the paginated response shape for GET /emotes/stats.
+type EmoteStatsResponse struct {
+	Data       *[]EmoteStat `json:"data"`
+	Pagination PageInfo     `json:"pagination"`
+	StatusCode int          `json:"statusCode"`
+	Duration   float64      `json:"duration"`
+}
+
+// Reminder represents a scheduled or on-next-seen reminder message.
+type Reminder struct {
+	SetAt       time.Time  `json:"set_at"`
+	SentAt      *time.Time `json:"sent_at,omitempty"`
+	ReadyAt     *time.Time `json:"ready_at,omitempty"`
+	UserID      string     `json:"user_id"`
+	RecipientID string     `json:"recipient_id"`
+	ChannelID   string     `json:"channel_id"`
+	Message     string     `json:"message"`
+	Status      string     `json:"status"`
+	Platform    string     `json:"platform"`
+	Type        string     `json:"type"`
+	ReminderID  int        `json:"reminder_id"`
+	AfkWithheld bool       `json:"afk_withheld"`
+}

@@ -4,6 +4,56 @@
     "client_secret": "asdf1234",
     "oauth_uri": "https://api.potat.industries"
   },
+  "discord": {
+    "id": "",
+    "oauth": "",
+    "client_id": "",
+    "client_secret": "",
+    "oauth_uri": "https://your-domain.com/"
+  },
+  "spotify": {
+    "client_id": "",
+    "client_secret": "",
+    "oauth_uri": "https://your-domain.com/"
+  },
+  "kick": {
+    "id": "",
+    "client_id": "",
+    "client_secret": "",
+    "oauth_uri": "https://your-domain.com/",
+    "oauth": ""
+  },
+  "anilist": {
+    "client_id": "",
+    "client_secret": "",
+    "oauth_uri": "https://your-domain.com/"
+  },
+  "trakt": {
+    "client_id": "",
+    "client_secret": "",
+    "oauth_uri": "https://your-domain.com/"
+  },
+  "ffz": {
+    "id": "",
+    "client_id": "",
+    "client_secret": "",
+    "token": "",
+    "refresh": "",
+    "oauth_uri": "https://your-domain.com/"
+  },
+  "stv": {
+    "token": "",
+    "id": ""
+  },
+  "bttv": {
+    "token": "",
+    "id": ""
+  },
+  "misc": {
+    "steam": {
+      "key": ""
+    }
+  },
   "loops": {
     "enabled": true
   },
