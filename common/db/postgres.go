@@ -399,6 +399,8 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 				*channel.Blocks.Users = append(*channel.Blocks.Users, block)
 			case common.CommandBlock:
 				*channel.Blocks.Commands = append(*channel.Blocks.Commands, block)
+			case common.GlobalBlock:
+				// global blocks are not categorized into users/commands
 			}
 		}
 	} else {
@@ -723,4 +725,253 @@ func (db *PostgresClient) GetUploadCreatedAt(
 	}
 
 	return &createdAt, nil
+}
+
+// GetAllChannels retrieves all channels with state = 'JOINED', ordered by username.
+func (db *PostgresClient) GetAllChannels(ctx context.Context) ([]common.ChannelListItem, error) {
+	query := `
+		SELECT channel_id, username, platform, state
+		FROM channels
+		WHERE state = 'JOINED'
+		ORDER BY username
+	`
+
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var channels []common.ChannelListItem
+	for rows.Next() {
+		var ch common.ChannelListItem
+		if err := rows.Scan(&ch.ChannelID, &ch.Username, &ch.Platform, &ch.State); err != nil {
+			return nil, err
+		}
+		channels = append(channels, ch)
+	}
+
+	return channels, rows.Err()
+}
+
+// UpdateUserSettings replaces the settings JSONB column for a user.
+func (db *PostgresClient) UpdateUserSettings(ctx context.Context, userID int, settings common.UserSettings) error {
+	query := `UPDATE users SET settings = $1 WHERE user_id = $2`
+	_, err := db.Pool.Exec(ctx, query, settings, userID)
+
+	return err
+}
+
+// UpdateChannelSettings replaces the settings JSONB column for a channel.
+func (db *PostgresClient) UpdateChannelSettings(
+	ctx context.Context,
+	channelID string,
+	settings common.ChannelSettings,
+) error {
+	query := `UPDATE channels SET settings = $1 WHERE channel_id = $2`
+	_, err := db.Pool.Exec(ctx, query, settings, channelID)
+
+	return err
+}
+
+// GetCommandSettings retrieves all command settings rows for a given channel.
+func (db *PostgresClient) GetCommandSettings(
+	ctx context.Context,
+	channelID string,
+) ([]common.CommandSettings, error) {
+	query := `
+		SELECT
+			channel_id,
+			command,
+			permission,
+			users_blacklisted,
+			users_whitelisted,
+			custom_cooldown,
+			channel_usage,
+			is_enabled,
+			offline_only,
+			silent_errors,
+			allow_bots,
+			platform,
+			ambassador_granted
+		FROM command_settings
+		WHERE channel_id = $1
+		ORDER BY command
+	`
+
+	rows, err := db.Pool.Query(ctx, query, channelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []common.CommandSettings
+	for rows.Next() {
+		var cs common.CommandSettings
+		if err := rows.Scan(
+			&cs.ChannelID,
+			&cs.Command,
+			&cs.Permission,
+			&cs.UsersBlacklisted,
+			&cs.UsersWhitelisted,
+			&cs.CustomCooldown,
+			&cs.ChannelUsage,
+			&cs.IsEnabled,
+			&cs.OfflineOnly,
+			&cs.SilentErrors,
+			&cs.AllowBots,
+			&cs.Platform,
+			&cs.AmbassadorGranted,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, cs)
+	}
+
+	return results, rows.Err()
+}
+
+// UpsertCommandSettings inserts or updates a single command's settings row.
+func (db *PostgresClient) UpsertCommandSettings(ctx context.Context, cs common.CommandSettings) error {
+	query := `
+		INSERT INTO command_settings (
+			channel_id, command, permission, users_blacklisted, users_whitelisted,
+			custom_cooldown, is_enabled, offline_only, silent_errors, allow_bots,
+			platform, ambassador_granted
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		ON CONFLICT (channel_id, command) DO UPDATE SET
+			permission         = EXCLUDED.permission,
+			users_blacklisted  = EXCLUDED.users_blacklisted,
+			users_whitelisted  = EXCLUDED.users_whitelisted,
+			custom_cooldown    = EXCLUDED.custom_cooldown,
+			is_enabled         = EXCLUDED.is_enabled,
+			offline_only       = EXCLUDED.offline_only,
+			silent_errors      = EXCLUDED.silent_errors,
+			allow_bots         = EXCLUDED.allow_bots,
+			platform           = EXCLUDED.platform,
+			ambassador_granted = EXCLUDED.ambassador_granted
+	`
+
+	platform := cs.Platform
+	if platform == "" {
+		platform = "TWITCH"
+	}
+
+	_, err := db.Pool.Exec(
+		ctx, query,
+		cs.ChannelID, cs.Command, cs.Permission,
+		cs.UsersBlacklisted, cs.UsersWhitelisted,
+		cs.CustomCooldown, cs.IsEnabled, cs.OfflineOnly,
+		cs.SilentErrors, cs.AllowBots, platform, cs.AmbassadorGranted,
+	)
+
+	return err
+}
+
+// ResetCommandSettings resets a single command's overrides back to their defaults.
+func (db *PostgresClient) ResetCommandSettings(ctx context.Context, channelID, command string) error {
+	query := `
+		UPDATE command_settings SET
+			is_enabled         = TRUE,
+			offline_only       = NULL,
+			custom_cooldown    = NULL,
+			silent_errors      = FALSE,
+			users_whitelisted  = NULL,
+			users_blacklisted  = NULL,
+			allow_bots         = NULL
+		WHERE channel_id = $1 AND command = $2
+	`
+	_, err := db.Pool.Exec(ctx, query, channelID, command)
+
+	return err
+}
+
+// GetChannelAmbassadors returns the ambassadors slice for a channel, used for auth checks.
+func (db *PostgresClient) GetChannelAmbassadors(
+	ctx context.Context,
+	channelID string,
+	platform common.Platforms,
+) ([]string, error) {
+	query := `SELECT ambassadors FROM channels WHERE channel_id = $1 AND platform = $2`
+
+	var ambassadors []string
+	err := db.Pool.QueryRow(ctx, query, channelID, platform).Scan(&ambassadors)
+	if err != nil {
+		return nil, err
+	}
+
+	return ambassadors, nil
+}
+
+// GetUserReminders retrieves all pending reminders for a user on a given platform.
+func (db *PostgresClient) GetUserReminders(
+	ctx context.Context,
+	userID string,
+	platform common.Platforms,
+) ([]common.Reminder, error) {
+	query := `
+		SELECT
+			reminder_id, user_id, recipient_id, channel_id,
+			message, ready_at, set_at, afk_withheld, status, platform, sent_at, type
+		FROM reminders
+		WHERE recipient_id = $1 AND platform = $2
+		ORDER BY set_at DESC
+	`
+
+	rows, err := db.Pool.Query(ctx, query, userID, platform)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reminders []common.Reminder
+	for rows.Next() {
+		var r common.Reminder
+		if err := rows.Scan(
+			&r.ReminderID, &r.UserID, &r.RecipientID, &r.ChannelID,
+			&r.Message, &r.ReadyAt, &r.SetAt, &r.AfkWithheld, &r.Status, &r.Platform, &r.SentAt, &r.Type,
+		); err != nil {
+			return nil, err
+		}
+		reminders = append(reminders, r)
+	}
+
+	return reminders, rows.Err()
+}
+
+// DeleteReminder hard-deletes a reminder by ID, verifying the owner platform ID.
+func (db *PostgresClient) DeleteReminder(ctx context.Context, reminderID int, recipientID string) error {
+	query := `DELETE FROM reminders WHERE reminder_id = $1 AND recipient_id = $2`
+	_, err := db.Pool.Exec(ctx, query, reminderID, recipientID)
+
+	return err
+}
+
+// UpsertOAuthToken stores or refreshes a platform OAuth token for a given user.
+func (db *PostgresClient) UpsertOAuthToken(
+	ctx context.Context,
+	platformID string,
+	platform common.Platforms,
+	accessToken string,
+	refreshToken string,
+	scope []string,
+	expiresIn int,
+) error {
+	query := `
+		INSERT INTO connection_oauth (
+			platform_id, access_token, refresh_token, scope, expires_in, added_at, platform
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (platform_id, platform) DO UPDATE SET
+			access_token  = EXCLUDED.access_token,
+			refresh_token = EXCLUDED.refresh_token,
+			scope         = EXCLUDED.scope,
+			expires_in    = EXCLUDED.expires_in,
+			added_at      = EXCLUDED.added_at
+	`
+	_, err := db.Pool.Exec(
+		ctx, query,
+		platformID, accessToken, refreshToken, scope, expiresIn, time.Now(), platform,
+	)
+
+	return err
 }
