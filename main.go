@@ -15,8 +15,11 @@ import (
 	"time"
 
 	"github.com/Potat-Industries/potat-api/api"
+	_ "github.com/Potat-Industries/potat-api/api/routes/del"
 	_ "github.com/Potat-Industries/potat-api/api/routes/get"
+	_ "github.com/Potat-Industries/potat-api/api/routes/patch"
 	_ "github.com/Potat-Industries/potat-api/api/routes/post"
+	_ "github.com/Potat-Industries/potat-api/api/routes/put"
 	"github.com/Potat-Industries/potat-api/common"
 	"github.com/Potat-Industries/potat-api/common/db"
 	"github.com/Potat-Industries/potat-api/common/logger"
