@@ -612,7 +612,7 @@ func backupPostgres(
 	)
 
 	//nolint:gosec
-	cmd := exec.Command("sh", "-c", fmt.Sprintf(
+	cmd := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf(
 		"PGPASSWORD=%s pg_dump -d %s -U %s -h %s | zstd -3 --threads=%d > %s",
 		config.Postgres.Password,
 		config.Postgres.Database,

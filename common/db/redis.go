@@ -21,7 +21,7 @@ var ErrRedisNil = redis.Nil
 func InitRedis(config common.Config) (*RedisClient, error) {
 	host := config.Redis.Host
 	if host == "" {
-		host = "localhost"
+		host = "localhost" //nolint:goconst
 	}
 
 	port := config.Redis.Port
