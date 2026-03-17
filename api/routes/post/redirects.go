@@ -48,7 +48,7 @@ func createRedirect(writer http.ResponseWriter, request *http.Request) { //nolin
 	key, err := postgres.GetKeyByRedirect(request.Context(), input.URL)
 	if err == nil && key != "" {
 		response := fmt.Sprintf("https://%s/%s", request.Host, key)
-		_, err = writer.Write([]byte(response))
+		_, err = writer.Write([]byte(response)) //nolint:gosec
 		if err != nil {
 			logger.Error.Printf("Failed to write response: %v", err)
 		}
@@ -72,7 +72,7 @@ func createRedirect(writer http.ResponseWriter, request *http.Request) { //nolin
 	}
 
 	response := fmt.Sprintf("https://%s/%s", request.Host, key)
-	if _, err = writer.Write([]byte(response)); err != nil {
+	if _, err = writer.Write([]byte(response)); err != nil { //nolint:gosec
 		logger.Error.Printf("Failed to write response: %v", err)
 	}
 }

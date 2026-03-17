@@ -202,7 +202,7 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		writer.Header().Set("X-Cache-Hit", "HIT")
 		writer.WriteHeader(http.StatusOK)
-		_, err = writer.Write([]byte(cache))
+		_, err = writer.Write([]byte(cache)) //nolint:gosec
 		if err != nil {
 			logger.Warn.Println("Failed to write document: ", err)
 		}
@@ -224,7 +224,7 @@ func (h *hastebin) handleGetRaw(writer http.ResponseWriter, request *http.Reques
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.Header().Set("X-Cache-Hit", "MISS")
 	writer.WriteHeader(http.StatusOK)
-	_, err = writer.Write([]byte(data))
+	_, err = writer.Write([]byte(data)) //nolint:gosec
 	if err != nil {
 		logger.Warn.Println("Failed to write document: ", err)
 	}

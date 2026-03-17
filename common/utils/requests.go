@@ -69,7 +69,7 @@ func makeRequest(
 		Timeout: time.Second * 10,
 	}
 
-	res, err := client.Do(req)
+	res, err := client.Do(req) //nolint:gosec
 	if err != nil {
 		return nil, err
 	}

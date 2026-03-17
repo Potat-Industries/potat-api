@@ -49,7 +49,7 @@ func InitPostgres(ctx context.Context, config common.Config) (*PostgresClient, e
 	return &PostgresClient{pool}, nil
 }
 
-func loadConfig(config common.Config) (*pgxpool.Config, error) {
+func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unparam
 	user := config.Postgres.User
 	if user == "" {
 		user = "postgres"

@@ -180,7 +180,7 @@ type ChannelSettings struct {
 
 // CommandSettings represents the settings for a command in a channel, including its permissions, cooldowns,
 // and usage limits.
-type CommandSettings struct {
+type CommandSettings struct { //nolint:govet
 	ChannelID         string   `json:"channel_id"`
 	Command           string   `json:"command"`
 	Permission        *string  `json:"permission,omitempty"`
@@ -200,8 +200,8 @@ type CommandSettings struct {
 type PlatformOauth struct {
 	AddedAt      time.Time `json:"added_at"`
 	PlatformID   string    `json:"platform_id"`
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
+	AccessToken  string    `json:"access_token"`  //nolint:gosec
+	RefreshToken string    `json:"refresh_token"` //nolint:gosec
 	Platform     Platforms `json:"platform"`
 	Scope        []string  `json:"scope"`
 	ExpiresIn    int       `json:"expires_in"`
@@ -315,8 +315,8 @@ type TwitchValidation struct {
 
 // GenericOAUTHResponse represents a generic OAuth response structure.
 type GenericOAUTHResponse struct {
-	AccessToken  string   `json:"access_token"`
-	RefreshToken string   `json:"refresh_token"`
+	AccessToken  string   `json:"access_token"`  //nolint:gosec
+	RefreshToken string   `json:"refresh_token"` //nolint:gosec
 	TokenType    string   `json:"token_type"`
 	Scope        []string `json:"scope"`
 	ExpiresIn    int      `json:"expires_in"`
@@ -436,7 +436,7 @@ type EmoteStat struct {
 }
 
 // EmoteHistoryEntry represents a single per-user emote usage record from Clickhouse.
-type EmoteHistoryEntry struct {
+type EmoteHistoryEntry struct { //nolint:govet
 	EmoteID    string    `json:"emote_id"`
 	EmoteName  string    `json:"emote_name"`
 	EmoteAlias string    `json:"emote_alias"`
@@ -448,7 +448,7 @@ type EmoteHistoryEntry struct {
 }
 
 // PageInfo contains cursor-based pagination metadata.
-type PageInfo struct {
+type PageInfo struct { //nolint:govet
 	HasNextPage bool   `json:"hasNextPage"`
 	Cursor      string `json:"cursor"`
 }

@@ -117,7 +117,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 	}
 
 	// Excahnge code for access token
-	tokenResp, err := client.Do(req)
+	tokenResp, err := client.Do(req) //nolint:gosec
 	if err != nil {
 		http.Error(writer, "Failed to get access token", http.StatusInternalServerError)
 

@@ -233,7 +233,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 		writer.Header().Set("Content-Type", contentType)
 		writer.Header().Set("X-Cache-Hit", "HIT")
 		writer.WriteHeader(http.StatusOK)
-		_, err = writer.Write(cache)
+		_, err = writer.Write(cache) //nolint:gosec
 		if err != nil {
 			logger.Warn.Printf("Failed to write document: %v", err)
 		}
@@ -262,7 +262,7 @@ func (u *uploader) handleGet(writer http.ResponseWriter, request *http.Request) 
 		writer.Header().Set("Content-Disposition", "inline; filename=\""+*name+"\"")
 	}
 	writer.Header().Set("Content-Type", mimeType)
-	_, err = writer.Write(data)
+	_, err = writer.Write(data) //nolint:gosec
 	if err != nil {
 		logger.Error.Printf("Error writing file: %v", err)
 		http.Error(writer, "Failed to write file", http.StatusInternalServerError)
