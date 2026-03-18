@@ -67,20 +67,23 @@ const (
 // oauthStates maps state strings to true with a TTL for replay-attack prevention.
 var oauthStates sync.Map //nolint:gochecknoglobals
 
+// kickPKCEVerifiers maps OAuth state strings to PKCE code verifiers, with the same TTL as oauthStates.
+var kickPKCEVerifiers sync.Map //nolint:gochecknoglobals
+
 func newOAuthState(userID int) string {
 	nonce := uuid.New().String()
 	state := fmt.Sprintf("%s:%d", nonce, userID)
 	oauthStates.Store(state, true)
-	go func(s string) {
-		time.Sleep(oauthStateTTL)
-		oauthStates.Delete(s)
-	}(state)
+	time.AfterFunc(oauthStateTTL, func() {
+		oauthStates.Delete(state)
+	})
 
 	return state
 }
 
-// newKickOAuthState creates a state with an embedded PKCE code verifier.
-// State format: {nonce}:{userID}:{codeVerifier}.
+// newKickOAuthState creates an OAuth state and associated PKCE code verifier.
+// State format: {nonce}:{userID}.
+// The PKCE code verifier is stored server-side and must be retrieved on callback.
 func newKickOAuthState(userID int) (state, codeVerifier, codeChallenge string) {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
@@ -93,12 +96,15 @@ func newKickOAuthState(userID int) (state, codeVerifier, codeChallenge string) {
 	codeChallenge = base64.RawURLEncoding.EncodeToString(sum[:])
 
 	nonce := uuid.New().String()
-	state = fmt.Sprintf("%s:%d:%s", nonce, userID, codeVerifier)
+	state = fmt.Sprintf("%s:%d", nonce, userID)
+
+	// Store replay-protection state and PKCE verifier with the same TTL.
 	oauthStates.Store(state, true)
-	go func(s string) {
-		time.Sleep(oauthStateTTL)
-		oauthStates.Delete(s)
-	}(state)
+	kickPKCEVerifiers.Store(state, codeVerifier)
+	time.AfterFunc(oauthStateTTL, func() {
+		oauthStates.Delete(state)
+		kickPKCEVerifiers.Delete(state)
+	})
 
 	return state, codeVerifier, codeChallenge
 }
@@ -122,14 +128,16 @@ func consumeOAuthState(state string) (int, bool) {
 	return userID, true
 }
 
-// extractKickCodeVerifier returns the codeVerifier embedded in a Kick state string.
+// extractKickCodeVerifier retrieves the server-side PKCE code verifier for a Kick state.
 func extractKickCodeVerifier(state string) string {
-	parts := strings.SplitN(state, ":", 3) //nolint:mnd
-	if len(parts) < 3 {                    //nolint:mnd
+	v, ok := kickPKCEVerifiers.Load(state)
+	if !ok {
 		return ""
 	}
 
-	return parts[2]
+	s, _ := v.(string)
+
+	return s
 }
 
 // authUser retrieves the authenticated user from the request context.
@@ -155,10 +163,17 @@ func oauthPostMessage(payload map[string]any) string {
 	data, _ := json.Marshal(payload) //nolint:errchkjson
 
 	return fmt.Sprintf(`<script>
-if (window.opener) {
-  window.opener.postMessage(%s, '*');
-  window.close();
-}
+(function () {
+  try {
+    if (window.opener && window.opener.location && window.opener.location.origin) {
+      window.opener.postMessage(%s, window.opener.location.origin);
+    }
+  } catch (e) {
+    // Ignore errors and just close the window.
+  } finally {
+    window.close();
+  }
+})();
 </script>`, string(data))
 }
 
@@ -782,12 +797,18 @@ func steamAuthorizeHandler(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	config := utils.LoadConfig()
-	returnTo := fmt.Sprintf("%sauth/steam?user_id=%d",
-		strings.TrimRight(config.Anilist.OAuthURI, "/")+"/",
-		user.ID,
-	)
-	realm := strings.TrimRight(config.Anilist.OAuthURI, "/") + "/"
+	// Derive the base URL from the incoming request to ensure Steam OpenID
+	// callbacks use the correct host and scheme for this API instance.
+	scheme := "https"
+	if forwarded := request.Header.Get("X-Forwarded-Proto"); forwarded != "" {
+		// Use the first value if multiple are provided.
+		scheme = strings.Split(forwarded, ",")[0]
+	} else if request.TLS == nil {
+		scheme = "http"
+	}
+	baseURL := fmt.Sprintf("%s://%s/", scheme, request.Host)
+	returnTo := fmt.Sprintf("%sauth/steam?user_id=%d", baseURL, user.ID)
+	realm := baseURL
 
 	params := url.Values{
 		"openid.ns":         {steamOpenIDNS},
@@ -812,7 +833,26 @@ func steamCallbackHandler(writer http.ResponseWriter, request *http.Request) {
 	maps.Copy(verifyParams, query)
 	verifyParams.Set("openid.mode", "check_authentication")
 
-	resp, err := http.PostForm(steamOpenIDURL, verifyParams) //nolint:noctx
+	ctx := request.Context()
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		steamOpenIDURL,
+		strings.NewReader(verifyParams.Encode()),
+	)
+	if err != nil {
+		sendHTML(writer, http.StatusInternalServerError, oauthErrorHTML("Steam verification failed"))
+
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req) //nolint:gosec
 	if err != nil || resp.StatusCode != http.StatusOK {
 		sendHTML(writer, http.StatusForbidden, oauthErrorHTML("Steam verification failed"))
 

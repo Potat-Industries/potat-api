@@ -73,10 +73,10 @@ func deleteCommandSettings(writer http.ResponseWriter, request *http.Request) { 
 		return
 	}
 
-	// Without a specific command name, this is a no-op (not yet implemented upstream).
+	// command is required — this endpoint resets a single command override back to defaults.
 	if command == "" {
-		api.GenericResponse(writer, http.StatusOK, common.GenericResponse[any]{
-			Data: &[]any{},
+		api.GenericResponse(writer, http.StatusBadRequest, common.GenericResponse[any]{
+			Errors: &[]common.ErrorMessage{{Message: "Missing required field: command"}},
 		}, start)
 
 		return

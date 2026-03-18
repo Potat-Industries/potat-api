@@ -68,7 +68,8 @@ func normaliseProvider(provider string) []string {
 	case "ALL", "":
 		return []string{}
 	default:
-		return []string{"STV"}
+		// For unknown/unsupported providers, apply no provider filter.
+		return []string{}
 	}
 }
 
@@ -139,8 +140,12 @@ func getEmoteStats(writer http.ResponseWriter, request *http.Request) { //nolint
 
 	offset := 0
 	if cursor := query.Get("after"); cursor != "" {
-		if o, err := decodeCursor(cursor); err == nil {
+		if o, err := decodeCursor(cursor); err == nil && o >= 0 {
 			offset = o
+		} else {
+			writeEmoteError(writer, http.StatusBadRequest, start)
+
+			return
 		}
 	}
 
