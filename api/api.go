@@ -43,6 +43,7 @@ func StartServing(
 	postgres *db.PostgresClient,
 	redis *db.RedisClient,
 	clickhouse *db.ClickhouseClient,
+	nats *utils.NatsClient,
 	metrics *utils.Metrics,
 ) error {
 	if config.API.Host == "" || config.API.Port == "" {
@@ -54,7 +55,7 @@ func StartServing(
 	}
 
 	api.router.Use(middleware.LogRequest(metrics))
-	api.router.Use(middleware.InjectDatabases(postgres, redis, clickhouse))
+	api.router.Use(middleware.InjectDatabases(postgres, redis, clickhouse, nats))
 	api.router.Use(middleware.NewRateLimiter(100, 1*time.Minute, redis))
 
 	authenticator := middleware.NewAuthenticator(config.Twitch.ClientSecret, GenericResponse)

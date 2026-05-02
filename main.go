@@ -110,7 +110,7 @@ func main() { //nolint:cyclop
 	apiChan := make(chan error)
 	if config.API.Enabled {
 		go func() {
-			apiChan <- api.StartServing(*config, postgres, redis, clickhouse, metrics)
+			apiChan <- api.StartServing(*config, postgres, redis, clickhouse, nats, metrics)
 		}()
 	}
 

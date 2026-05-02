@@ -139,16 +139,15 @@ func (n *NatsClient) handleMessage(message *nats.Msg) {
 }
 
 // BridgeRequest sends a request to the NATS server and waits for a response.
-func BridgeRequest(
+func (n *NatsClient) BridgeRequest(
 	ttl time.Duration,
 	request string,
 ) ([]byte, error) {
-	nc, err := nats.Connect(nats.DefaultURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to publish request: %w", err)
+	if n == nil || n.Client == nil {
+		return nil, errNatsNotConnected
 	}
 
-	response, err := nc.Request(
+	response, err := n.Client.Request(
 		"github.com/Potat-Industries/potat-api.job-request",
 		[]byte(request),
 		ttl,
