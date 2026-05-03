@@ -4,7 +4,6 @@ package patch
 import (
 	"encoding/json"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/Potat-Industries/potat-api/api"
@@ -116,25 +115,12 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	// Only the broadcaster or an ambassador (or admin) may update settings.
-	var twitchID string
-	for _, conn := range user.Connections {
-		if conn.Platform == common.TWITCH {
-			twitchID = conn.UserID
+	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
+		api.GenericResponse(writer, http.StatusForbidden, common.GenericResponse[any]{
+			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
+		}, start)
 
-			break
-		}
-	}
-
-	if twitchID != channelID && user.Level < int(common.ADMIN) {
-		ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, common.TWITCH)
-		if err != nil || !slices.Contains(ambassadors, twitchID) {
-			api.GenericResponse(writer, http.StatusForbidden, common.GenericResponse[any]{
-				Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
-			}, start)
-
-			return
-		}
+		return
 	}
 
 	var input common.ChannelSettings

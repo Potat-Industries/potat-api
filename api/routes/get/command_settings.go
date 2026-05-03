@@ -3,7 +3,6 @@ package get
 
 import (
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/Potat-Industries/potat-api/api"
@@ -26,31 +25,6 @@ func init() {
 	})
 }
 
-// isChannelAuthorized returns true if the user is admin, the broadcaster, or a channel ambassador.
-func isChannelAuthorized(
-	request *http.Request,
-	user *common.User,
-	channelID string,
-	postgres *db.PostgresClient,
-) bool {
-	if int(common.ADMIN) <= user.Level {
-		return true
-	}
-
-	twitchID := getTwitchPlatformID(user)
-
-	if twitchID == channelID {
-		return true
-	}
-
-	ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, common.TWITCH)
-	if err != nil {
-		return false
-	}
-
-	return slices.Contains(ambassadors, twitchID)
-}
-
 // resolveChannelID returns the channel ID from ?id= or defaults to the authenticated user's Twitch ID.
 func resolveChannelID(request *http.Request, user *common.User) string {
 	if id := request.URL.Query().Get("id"); id != "" {
@@ -62,7 +36,7 @@ func resolveChannelID(request *http.Request, user *common.User) string {
 		return id
 	}
 
-	return getTwitchPlatformID(user)
+	return middleware.GetTwitchPlatformID(user)
 }
 
 func getCommandSettingsHandler(writer http.ResponseWriter, request *http.Request) {
@@ -96,7 +70,7 @@ func getCommandSettingsHandler(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	if !isChannelAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, CommandSettingsResponse{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)

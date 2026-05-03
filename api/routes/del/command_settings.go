@@ -3,7 +3,6 @@ package del
 
 import (
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/Potat-Industries/potat-api/api"
@@ -65,7 +64,7 @@ func deleteCommandSettings(writer http.ResponseWriter, request *http.Request) { 
 		return
 	}
 
-	if !isDelAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)
@@ -96,33 +95,4 @@ func deleteCommandSettings(writer http.ResponseWriter, request *http.Request) { 
 	}, start)
 }
 
-func isDelAuthorized(
-	request *http.Request,
-	user *common.User,
-	channelID string,
-	postgres *db.PostgresClient,
-) bool {
-	if user.Level >= int(common.ADMIN) {
-		return true
-	}
 
-	var twitchID string
-	for _, conn := range user.Connections {
-		if conn.Platform == common.TWITCH {
-			twitchID = conn.UserID
-
-			break
-		}
-	}
-
-	if twitchID == channelID {
-		return true
-	}
-
-	ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, common.TWITCH)
-	if err != nil {
-		return false
-	}
-
-	return slices.Contains(ambassadors, twitchID)
-}

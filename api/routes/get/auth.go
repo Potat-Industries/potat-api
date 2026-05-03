@@ -147,17 +147,6 @@ func authUser(request *http.Request) (*common.User, bool) {
 	return user, ok && user != nil
 }
 
-// getTwitchPlatformID finds the Twitch platform ID from a user's connections.
-func getTwitchPlatformID(user *common.User) string {
-	for _, conn := range user.Connections {
-		if conn.Platform == common.TWITCH {
-			return conn.UserID
-		}
-	}
-
-	return ""
-}
-
 // oauthPostMessage builds the postMessage HTML used to close popups.
 func oauthPostMessage(payload map[string]any) string {
 	data, _ := json.Marshal(payload) //nolint:errchkjson

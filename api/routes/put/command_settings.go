@@ -4,7 +4,6 @@ package put
 import (
 	"encoding/json"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/Potat-Industries/potat-api/api"
@@ -79,7 +78,7 @@ func putCommandSettings(writer http.ResponseWriter, request *http.Request) { //n
 
 	input.ChannelID = channelID
 
-	if !isCmdAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)
@@ -101,33 +100,4 @@ func putCommandSettings(writer http.ResponseWriter, request *http.Request) { //n
 	}, start)
 }
 
-func isCmdAuthorized(
-	request *http.Request,
-	user *common.User,
-	channelID string,
-	postgres *db.PostgresClient,
-) bool {
-	if user.Level >= int(common.ADMIN) {
-		return true
-	}
 
-	var twitchID string
-	for _, conn := range user.Connections {
-		if conn.Platform == common.TWITCH {
-			twitchID = conn.UserID
-
-			break
-		}
-	}
-
-	if twitchID == channelID {
-		return true
-	}
-
-	ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, common.TWITCH)
-	if err != nil {
-		return false
-	}
-
-	return slices.Contains(ambassadors, twitchID)
-}
