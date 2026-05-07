@@ -225,6 +225,7 @@ func initNats(ctx context.Context) *utils.NatsClient {
 	if err != nil {
 		logger.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
 	}
+	logger.Info.Println("NATS initialized")
 
 	return nats
 }

@@ -674,7 +674,7 @@ func backupPostgres(
 		return
 	}
 
-	err = natsClient.Publish("github.com/Potat-Industries/potat-api.postgres-backup", jsonMessage)
+	err = natsClient.Publish("potat-api.postgres-backup", jsonMessage)
 	if err != nil {
 		logger.Error.Println("Failed to publish to queue:", err)
 

@@ -66,7 +66,7 @@ func (n *NatsClient) subNatsStream(ctx context.Context) error {
 		return err
 	}
 
-	err = n.Client.Publish("github.com/Potat-Industries/potat-api.connected", []byte(nil))
+	err = n.Client.Publish("potat-api.connected", []byte(nil))
 	if err != nil {
 		logger.Warn.Printf("Failed to publish connected message: %v", err)
 	}
