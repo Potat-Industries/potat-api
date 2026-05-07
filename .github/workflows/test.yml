@@ -22,6 +22,9 @@ jobs:
         with:
           go-version: 1.23
 
+      - name: Setup go-acc
+        run: go install github.com/ory/go-acc@latest
+
       - name: Setup gotestfmt
         uses: haveyoudebuggedit/gotestfmt-action@v2
         with:
@@ -29,8 +32,13 @@ jobs:
 
       - name: Run test
         run: |
+          TEST_BENCH_OPTION="-bench=."
+
           set -euo pipefail
-          go test -coverprofile=cover.out -coverpkg=./... -json -v -race ./... | tee /tmp/gotest.log | gotestfmt
+          go-acc -o cover.out ./... -- \
+            ${TEST_BENCH_OPTION} \
+            -json \
+            -v -race 2>&1 | grep -v '^go: downloading' | tee /tmp/gotest.log | gotestfmt
 
       - name: Upload test log
         uses: actions/upload-artifact@v4
