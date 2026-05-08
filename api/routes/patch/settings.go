@@ -40,7 +40,7 @@ func patchUserSettings(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	var input common.UserSettings
+	input := user.Settings
 	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
 		api.GenericResponse(writer, http.StatusBadRequest, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Invalid request body"}},
@@ -123,7 +123,17 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	var input common.ChannelSettings
+	existingSettings, err := postgres.GetChannelSettingsByID(request.Context(), channelID)
+	if err != nil {
+		logger.Error.Printf("Error fetching channel settings: %v", err)
+		api.GenericResponse(writer, http.StatusInternalServerError, common.GenericResponse[any]{
+			Errors: &[]common.ErrorMessage{{Message: "Internal Server Error"}},
+		}, start)
+
+		return
+	}
+
+	input := existingSettings
 	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
 		api.GenericResponse(writer, http.StatusBadRequest, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Invalid request body"}},

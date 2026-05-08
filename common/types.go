@@ -164,7 +164,7 @@ type ChannelSettings struct {
 	AllowBotEmoteTracking  *bool    `json:"allow_bot_emote_tracking,omitempty"`
 	IgnoreDropped          *bool    `json:"ignore_dropped,omitempty"`
 	NoLinks                *bool    `json:"no_links,omitempty"`
-	ForcePyramidNotVerbose *bool    `json:"force_potato_not_verbose,omitempty"`
+	ForcePyramidNotVerbose *bool    `json:"force_pyramid_not_verbose,omitempty"`
 	Language               string   `json:"language"`
 	Permission             string   `json:"permission"`
 	Prefix                 string   `json:"prefix"`

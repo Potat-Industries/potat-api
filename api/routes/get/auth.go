@@ -842,12 +842,18 @@ func steamCallbackHandler(writer http.ResponseWriter, request *http.Request) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req) //nolint:gosec
-	if err != nil || resp.StatusCode != http.StatusOK {
+	if err != nil {
 		sendHTML(writer, http.StatusForbidden, oauthErrorHTML("Steam verification failed"))
 
 		return
 	}
 	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		sendHTML(writer, http.StatusForbidden, oauthErrorHTML("Steam verification failed"))
+
+		return
+	}
 
 	body, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(body), "is_valid:true") {

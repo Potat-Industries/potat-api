@@ -19,6 +19,7 @@ import (
 const (
 	defaultEmoteLimit = 100
 	maxEmoteLimit     = 300
+	maxEmoteOffset    = 10_000
 )
 
 func init() {
@@ -140,7 +141,7 @@ func getEmoteStats(writer http.ResponseWriter, request *http.Request) { //nolint
 
 	offset := 0
 	if cursor := query.Get("after"); cursor != "" {
-		if o, err := decodeCursor(cursor); err == nil && o >= 0 {
+		if o, err := decodeCursor(cursor); err == nil && o >= 0 && o <= maxEmoteOffset {
 			offset = o
 		} else {
 			writeEmoteError(writer, http.StatusBadRequest, start)

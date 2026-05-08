@@ -223,7 +223,7 @@ func initClickhouse(ctx context.Context, config common.Config) *db.ClickhouseCli
 func initNats(ctx context.Context) *utils.NatsClient {
 	nats, err := utils.CreateNatsBroker(ctx)
 	if err != nil {
-		logger.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
+		logger.Error.Panicf("Failed to connect to NATS: %v", err)
 	}
 	logger.Info.Println("NATS initialized")
 

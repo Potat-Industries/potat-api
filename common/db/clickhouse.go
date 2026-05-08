@@ -87,27 +87,26 @@ func (db *ClickhouseClient) GetEmoteStats( //nolint:cyclop
 
 	if opts.ChannelID != "" {
 		args = append(args, opts.ChannelID)
-		fmt.Fprintf(&sb, " AND channel_id = $%d", len(args))
+		sb.WriteString(" AND channel_id = ?")
 	}
 
 	if opts.UserID != "" {
 		args = append(args, opts.UserID)
-		fmt.Fprintf(&sb, " AND user_id = $%d", len(args))
+		sb.WriteString(" AND user_id = ?")
 	}
 
 	if opts.PeriodHours > 0 {
 		cutoff := time.Now().Add(-time.Duration(opts.PeriodHours) * time.Hour)
 		args = append(args, cutoff)
-		fmt.Fprintf(&sb, " AND used_at >= $%d", len(args))
+		sb.WriteString(" AND used_at >= ?")
 	}
 
 	if len(opts.Providers) > 0 {
-		placeholders := make([]string, len(opts.Providers))
-		for i, p := range opts.Providers {
+		for _, p := range opts.Providers {
 			args = append(args, p)
-			placeholders[i] = fmt.Sprintf("$%d", len(args))
 		}
-		fmt.Fprintf(&sb, " AND provider IN (%s)", strings.Join(placeholders, ","))
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(opts.Providers)), ",")
+		fmt.Fprintf(&sb, " AND provider IN (%s)", placeholders)
 	}
 
 	sb.WriteString(" GROUP BY emote_id, emote_name, emote_alias, provider")
@@ -168,12 +167,12 @@ func (db *ClickhouseClient) GetEmoteHistory(
 
 	if userID != "" {
 		args = append(args, userID)
-		fmt.Fprintf(&sb, " AND user_id = $%d", len(args))
+		sb.WriteString(" AND user_id = ?")
 	}
 
 	if channelID != "" {
 		args = append(args, channelID)
-		fmt.Fprintf(&sb, " AND channel_id = $%d", len(args))
+		sb.WriteString(" AND channel_id = ?")
 	}
 
 	sb.WriteString(" GROUP BY emote_id, emote_name, emote_alias, provider, channel_id, user_id")

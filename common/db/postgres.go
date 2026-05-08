@@ -774,6 +774,14 @@ func (db *PostgresClient) UpdateChannelSettings(
 	return err
 }
 
+// GetChannelSettingsByID retrieves only the settings column for a channel by its ID.
+func (db *PostgresClient) GetChannelSettingsByID(ctx context.Context, channelID string) (common.ChannelSettings, error) {
+	var settings common.ChannelSettings
+	err := db.Pool.QueryRow(ctx, `SELECT settings FROM channels WHERE channel_id = $1`, channelID).Scan(&settings)
+
+	return settings, err
+}
+
 // GetCommandSettings retrieves all command settings rows for a given channel.
 func (db *PostgresClient) GetCommandSettings(
 	ctx context.Context,
@@ -878,7 +886,9 @@ func (db *PostgresClient) ResetCommandSettings(ctx context.Context, channelID, c
 			silent_errors      = FALSE,
 			users_whitelisted  = NULL,
 			users_blacklisted  = NULL,
-			allow_bots         = NULL
+			allow_bots         = NULL,
+			permission         = NULL,
+			ambassador_granted = FALSE
 		WHERE channel_id = $1 AND command = $2
 	`
 	_, err := db.Pool.Exec(ctx, query, channelID, command)
