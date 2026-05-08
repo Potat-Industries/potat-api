@@ -86,7 +86,7 @@ type TwitchChannelMeta struct {
 // TwitchUserMeta represents the metadata for a user on Twitch, including their color and roles.
 type TwitchUserMeta struct {
 	Color string      `json:"color,omitempty"`
-	Roles TwitchRoles `json:"roles,omitempty"`
+	Roles TwitchRoles `json:"roles,omitzero"`
 }
 
 // StvUserMeta represents the metadata for a user on 7TV, including their paint ID and roles.
@@ -104,7 +104,7 @@ type TwitchRoles struct {
 
 // Channel represents a channel on a platform, including its blocks, settings, commands, and other metadata.
 type Channel struct {
-	Blocks      FilteredBlocks    `json:"blocks,omitempty"`
+	Blocks      FilteredBlocks    `json:"blocks,omitzero"`
 	JoinedAt    *time.Time        `json:"joined_at,omitempty"`
 	Meta        map[string]any    `json:"meta"`
 	Commands    *[]ChannelCommand `json:"commands,omitempty"`

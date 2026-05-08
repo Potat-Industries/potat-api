@@ -3,6 +3,8 @@ package redirects
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRedirects__CheckProtocolFormatAfterProtocolReformat(t *testing.T) {
@@ -21,12 +23,10 @@ func TestRedirects__CheckProtocolFormatAfterProtocolReformat(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
 			cleanedURL := redirector.cleanRedirectProtocolSoLinksActuallyWork(tc.input)
-			if !strings.HasPrefix(cleanedURL, "https://") {
-				t.Errorf("Expected cleaned URL to start with 'https://', got %q", cleanedURL) //nolint:forbidigo
-			}
-			if cleanedURL != tc.expected {
-				t.Errorf("Expected %q, got %q", tc.expected, cleanedURL) //nolint:forbidigo
-			}
+			assert.Truef(
+				t, strings.HasPrefix(cleanedURL, "https://"), "Expected cleaned URL to start with 'https://', got %q", cleanedURL,
+			)
+			assert.Equal(t, tc.expected, cleanedURL)
 		})
 	}
 }

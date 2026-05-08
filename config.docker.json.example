@@ -1,0 +1,63 @@
+{
+  "twitch": {
+    "client_id": "your_twitch_client_id",
+    "client_secret": "your_twitch_client_secret",
+    "oauth_uri": "http://localhost:8080"
+  },
+  "loops": {
+    "enabled": false
+  },
+  "nats": {
+    "enabled": false
+  },
+  "api": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": "8080"
+  },
+  "socket": {
+    "enabled": false,
+    "host": "0.0.0.0",
+    "port": "8090"
+  },
+  "redirects": {
+    "enabled": false,
+    "host": "0.0.0.0",
+    "port": "8091"
+  },
+  "uploader": {
+    "authkey": "your_uploader_auth_key",
+    "enabled": false,
+    "port": "8092",
+    "host": "0.0.0.0"
+  },
+  "haste": {
+    "enabled": false,
+    "host": "0.0.0.0",
+    "port": "8081",
+    "keyLength": 6
+  },
+  "prometheus": {
+    "enabled": false,
+    "host": "0.0.0.0",
+    "port": "9100"
+  },
+  "postgres": {
+    "host": "postgres",
+    "port": "5432",
+    "database": "potat",
+    "user": "potat",
+    "password": "potat"
+  },
+  "clickhouse": {
+    "host": "clickhouse",
+    "port": "9000",
+    "database": "potat",
+    "user": "default",
+    "password": ""
+  },
+  "redis": {
+    "host": "redis",
+    "port": "6379"
+  }
+}

@@ -57,7 +57,7 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unpara
 
 	host := config.Postgres.Host
 	if host == "" {
-		host = "localhost"
+		host = "localhost" //nolint:goconst
 	}
 
 	port := config.Postgres.Port
@@ -400,7 +400,7 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 			case common.CommandBlock:
 				*channel.Blocks.Commands = append(*channel.Blocks.Commands, block)
 			case common.GlobalBlock:
-				// global blocks are not categorized into users/commands
+				continue
 			}
 		}
 	} else {

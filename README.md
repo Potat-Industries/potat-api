@@ -15,6 +15,12 @@ On startup if the required Postgres tables for haste, url shortener, or image ho
 - Optionally install [ClickHouse](https://clickhouse.com/docs/en/quick-start), and [RabbitMQ](https://www.rabbitmq.com/docs/download) if enabling the PotatBotat backend, and [Prometheus](https://prometheus.io/docs/prometheus/latest/installation/) if enabling metrics
 - Populate `exampleconfig.json` with the database credentials, and ports for services you want to run. It will be renamed on startup.
 
+### To run with Docker
+
+- Copy `config.docker.json.example` to `config.docker.json` and fill in your credentials
+- Run `docker compose up --build -d`
+- API will be available at `http://localhost:8080`
+
 ### Example Chatterino uploader configuration
 
 

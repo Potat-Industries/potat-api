@@ -1,4 +1,5 @@
 config.json
+config.docker.json
 potat-api
 perm
 dump
