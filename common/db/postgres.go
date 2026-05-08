@@ -775,7 +775,10 @@ func (db *PostgresClient) UpdateChannelSettings(
 }
 
 // GetChannelSettingsByID retrieves only the settings column for a channel by its ID.
-func (db *PostgresClient) GetChannelSettingsByID(ctx context.Context, channelID string) (common.ChannelSettings, error) {
+func (db *PostgresClient) GetChannelSettingsByID(
+	ctx context.Context,
+	channelID string,
+) (common.ChannelSettings, error) {
 	var settings common.ChannelSettings
 	err := db.Pool.QueryRow(ctx, `SELECT settings FROM channels WHERE channel_id = $1`, channelID).Scan(&settings)
 

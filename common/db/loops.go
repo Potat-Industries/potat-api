@@ -675,15 +675,17 @@ func backupPostgres(
 	}
 
 	if natsClient != nil {
-		err = natsClient.Publish("github.com/Potat-Industries/potat-api.postgres-backup", jsonMessage)
-		if err != nil {
-			logger.Error.Println("Failed to publish to queue:", err)
-
-			return
-		}
+		publishBackupNotification(natsClient, jsonMessage)
 	}
 
 	logger.Info.Println(message)
+}
+
+func publishBackupNotification(natsClient *utils.NatsClient, message []byte) {
+	err := natsClient.Publish("github.com/Potat-Industries/potat-api.postgres-backup", message)
+	if err != nil {
+		logger.Error.Println("Failed to publish to queue:", err)
+	}
 }
 
 func getDatabaseSize(ctx context.Context, postgres *PostgresClient, dbName string) (string, error) {

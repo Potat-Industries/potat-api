@@ -99,5 +99,3 @@ func putCommandSettings(writer http.ResponseWriter, request *http.Request) { //n
 		Data: &[]any{},
 	}, start)
 }
-
-

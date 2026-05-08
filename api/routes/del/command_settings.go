@@ -94,5 +94,3 @@ func deleteCommandSettings(writer http.ResponseWriter, request *http.Request) { 
 		Data: &[]any{},
 	}, start)
 }
-
-
