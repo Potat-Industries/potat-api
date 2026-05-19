@@ -45,25 +45,17 @@ var (
 // InitPostgres initializes a new Postgres client with the provided configuration.
 
 func InitPostgres(ctx context.Context, config common.Config) (*PostgresClient, error) {
-
 	dbConfig, err := loadConfig(config)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, dbConfig)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	return &PostgresClient{pool}, nil
-
 }
 
 func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unparam
@@ -71,33 +63,25 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unpara
 	user := config.Postgres.User
 
 	if user == "" {
-
 		user = "postgres"
-
 	}
 
 	host := config.Postgres.Host
 
 	if host == "" {
-
 		host = "localhost" //nolint:goconst
-
 	}
 
 	port := config.Postgres.Port
 
 	if port == "" {
-
 		port = "5432"
-
 	}
 
 	database := config.Postgres.Database
 
 	if database == "" {
-
 		database = "postgres"
-
 	}
 
 	constring := fmt.Sprintf(
@@ -116,7 +100,6 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unpara
 	)
 
 	dbConfig, err := pgxpool.ParseConfig(constring)
-
 	if err != nil {
 
 		logger.Error.Panicln("Error parsing database config", err)
@@ -138,35 +121,26 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unpara
 	dbConfig.ConnConfig.ConnectTimeout = 10 * time.Second
 
 	return dbConfig, nil
-
 }
 
 // CheckTableExists checks if a table exists in the database and creates it if it doesn't.
 
 func (db *PostgresClient) CheckTableExists(ctx context.Context, createTable string) {
-
 	_, err := db.Pool.Exec(ctx, createTable)
-
 	if err != nil {
-
 		logger.Error.Fatalf("Failed to create table: %v", err)
-
 	}
-
 }
 
 // Ping checks the connection to the database.
 
 func (db *PostgresClient) Ping(ctx context.Context) error {
-
 	return db.Pool.Ping(ctx)
-
 }
 
 // GetUserByName retrieves a user by their username from the database.
 
 func (db *PostgresClient) GetUserByName(ctx context.Context, username string) (*common.User, error) {
-
 	query := `
 
 		SELECT
@@ -213,21 +187,16 @@ func (db *PostgresClient) GetUserByName(ctx context.Context, username string) (*
 
 		&user.Connections,
 	)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	return &user, nil
-
 }
 
 // GetUserByInternalID retrieves a user by their internal ID from the database.
 
 func (db *PostgresClient) GetUserByInternalID(ctx context.Context, id int) (*common.User, error) {
-
 	query := `
 
 		SELECT
@@ -274,21 +243,16 @@ func (db *PostgresClient) GetUserByInternalID(ctx context.Context, id int) (*com
 
 		&user.Connections,
 	)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	return &user, nil
-
 }
 
 // GetChannelBlocks retrieves all blocks for a given channel from the database.
 
 func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {
-
 	query := `
 
 		SELECT
@@ -310,11 +274,8 @@ func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string
 	`
 
 	rows, err := db.Pool.Query(ctx, query, channelID)
-
 	if err != nil {
-
 		return nil
-
 	}
 
 	defer rows.Close()
@@ -337,11 +298,8 @@ func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string
 
 			&block.CommandName,
 		)
-
 		if err != nil {
-
 			return nil
-
 		}
 
 		blocks = append(blocks, block)
@@ -349,13 +307,11 @@ func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string
 	}
 
 	return &blocks
-
 }
 
 // GetChannelCommands retrieves all custom channel commands for a given channel from the database.
 
 func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID string) *[]common.ChannelCommand {
-
 	query := `
 
 		SELECT
@@ -411,11 +367,8 @@ func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID stri
 	`
 
 	rows, err := db.Pool.Query(ctx, query, channelID)
-
 	if err != nil {
-
 		return nil
-
 	}
 
 	defer rows.Close()
@@ -472,11 +425,8 @@ func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID stri
 
 			&command.Help,
 		)
-
 		if err != nil {
-
 			return nil
-
 		}
 
 		commands = append(commands, command)
@@ -484,39 +434,30 @@ func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID stri
 	}
 
 	return &commands
-
 }
 
 // GetChannelByName retrieves a channel by its username and platform from the database.
 
 func (db *PostgresClient) GetChannelByName(
-
 	ctx context.Context,
 
 	username string,
 
 	platform common.Platforms,
-
 ) (*common.Channel, error) {
-
 	return db.getChannelByType(ctx, username, platform, "NAME")
-
 }
 
 // GetChannelByID retrieves a channel by its ID and platform from the database.
 
 func (db *PostgresClient) GetChannelByID(
-
 	ctx context.Context,
 
 	channelID string,
 
 	platform common.Platforms,
-
 ) (*common.Channel, error) {
-
 	return db.getChannelByType(ctx, channelID, platform, "ID")
-
 }
 
 func (db *PostgresClient) getChannelByType( //nolint:cyclop
@@ -528,9 +469,7 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 	platform common.Platforms,
 
 	chanType string,
-
 ) (*common.Channel, error) {
-
 	query := `
 
 	  SELECT
@@ -601,11 +540,8 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 
 		&channel.State,
 	)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	var wg sync.WaitGroup
@@ -615,58 +551,44 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 	var commands *[]common.ChannelCommand
 
 	go func() {
-
 		defer wg.Done()
 
 		cmds := db.GetChannelCommands(ctx, channel.ChannelID)
 
 		if cmds != nil {
-
 			commands = cmds
-
 		}
-
 	}()
 
 	var blocks []common.Block
 
 	go func() {
-
 		defer wg.Done()
 
 		bs := db.GetChannelBlocks(ctx, channel.ChannelID)
 
 		if bs != nil {
-
 			blocks = *bs
-
 		}
-
 	}()
 
 	wg.Wait()
 
 	if commands != nil {
-
 		channel.Commands = commands
-
 	} else {
-
 		channel.Commands = &[]common.ChannelCommand{}
-
 	}
 
 	if len(blocks) > 0 {
 
 		channel.Blocks = common.FilteredBlocks{
-
 			Users: &[]common.Block{},
 
 			Commands: &[]common.Block{},
 		}
 
 		for _, block := range blocks {
-
 			switch block.BlockType {
 
 			case common.UserBlock:
@@ -682,23 +604,18 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 				continue
 
 			}
-
 		}
 
 	} else {
-
 		channel.Blocks = common.FilteredBlocks{}
-
 	}
 
 	return &channel, nil
-
 }
 
 // GetPotatoData retrieves potato data for a user from the database.
 
 func (db *PostgresClient) GetPotatoData(ctx context.Context, username string) (*common.PotatoData, error) {
-
 	query := `
 
 		SELECT
@@ -853,27 +770,20 @@ func (db *PostgresClient) GetPotatoData(ctx context.Context, username string) (*
 
 		&data.NotVerbose,
 	)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	return &data, nil
-
 }
 
 // BatchUserConections retrieves user connections for a batch of user IDs from the database.
 
 func (db *PostgresClient) BatchUserConections(
-
 	ctx context.Context,
 
 	ids []int,
-
 ) *map[int][]common.UserConnection {
-
 	query := `
 
 		SELECT
@@ -899,11 +809,8 @@ func (db *PostgresClient) BatchUserConections(
 	`
 
 	rows, err := db.Pool.Query(ctx, query, ids)
-
 	if err != nil {
-
 		return nil
-
 	}
 
 	defer rows.Close()
@@ -930,11 +837,8 @@ func (db *PostgresClient) BatchUserConections(
 
 			&connection.Meta,
 		)
-
 		if err != nil {
-
 			return nil
-
 		}
 
 		users[connection.ID] = append(users[connection.ID], connection)
@@ -942,85 +846,66 @@ func (db *PostgresClient) BatchUserConections(
 	}
 
 	return &users
-
 }
 
 // GetRedirectByKey retrieves a URL redirect from the database by its key.
 
 func (db *PostgresClient) GetRedirectByKey(ctx context.Context, key string) (string, error) {
-
 	query := `SELECT url FROM url_redirects WHERE key = $1`
 
 	var url string
 
 	err := db.Pool.QueryRow(ctx, query, key).Scan(&url)
-
 	if err != nil {
-
 		return "", err
-
 	}
 
 	return url, nil
-
 }
 
 // GetKeyByRedirect retrieves the key associated with a given URL redirect from the database.
 
 func (db *PostgresClient) GetKeyByRedirect(ctx context.Context, url string) (string, error) {
-
 	query := `SELECT key FROM url_redirects WHERE url = $1`
 
 	var key string
 
 	err := db.Pool.QueryRow(ctx, query, url).Scan(&key)
-
 	if err != nil {
-
 		return "", err
-
 	}
 
 	return key, nil
-
 }
 
 // RedirectExists checks if a URL redirect exists in the database by its key.
 
 func (db *PostgresClient) RedirectExists(ctx context.Context, key string) bool {
-
 	query := `SELECT EXISTS(SELECT 1 FROM url_redirects WHERE key = $1)`
 
 	var exists bool
 
 	err := db.Pool.QueryRow(ctx, query, key).Scan(&exists)
-
 	if err != nil {
-
 		return false
-
 	}
 
 	return exists
-
 }
 
 // NewRedirect inserts a new URL redirect into the database.
 
 func (db *PostgresClient) NewRedirect(ctx context.Context, key, url string) error {
-
 	query := `INSERT INTO url_redirects (key, url) VALUES ($1, $2)`
 
 	_, err := db.Pool.Exec(ctx, query, key, url)
 
 	return err
-
 }
 
 // GetHaste retrieves a hastebin text document from the database by its key.
 
 func (db *PostgresClient) GetHaste(ctx context.Context, key string) (string, error) {
-
 	query := `
 
 		UPDATE haste
@@ -1036,21 +921,16 @@ func (db *PostgresClient) GetHaste(ctx context.Context, key string) (string, err
 	var text string
 
 	err := db.Pool.QueryRow(ctx, query, encode(key)).Scan(&text)
-
 	if err != nil {
-
 		return "", err
-
 	}
 
 	return text, nil
-
 }
 
 // NewHaste inserts a new compressed hastebin text document into the database.
 
 func (db *PostgresClient) NewHaste(
-
 	ctx context.Context,
 
 	key string,
@@ -1058,9 +938,7 @@ func (db *PostgresClient) NewHaste(
 	text []byte,
 
 	source string,
-
 ) error {
-
 	query := `
 
 		INSERT INTO haste (key, content, source)
@@ -1074,23 +952,19 @@ func (db *PostgresClient) NewHaste(
 	_, err := db.Pool.Exec(ctx, query, encode(key), text, source)
 
 	return err
-
 }
 
 func encode(data string) string {
-
 	hash := md5.New() //nolint:gosec
 
 	hash.Write([]byte(data))
 
 	return hex.EncodeToString(hash.Sum(nil))
-
 }
 
 // NewUpload inserts a new file into the database and returns the creation timestamp.
 
 func (db *PostgresClient) NewUpload(
-
 	ctx context.Context,
 
 	key string,
@@ -1100,9 +974,7 @@ func (db *PostgresClient) NewUpload(
 	name string,
 
 	mimeType string,
-
 ) (bool, *time.Time) {
-
 	query := `
 
 		INSERT INTO file_store (file, file_name, mime_type, key)
@@ -1116,7 +988,6 @@ func (db *PostgresClient) NewUpload(
 	var createdAt time.Time
 
 	err := db.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
-
 	if err != nil {
 
 		logger.Error.Println("Error scanning upload", err)
@@ -1126,19 +997,15 @@ func (db *PostgresClient) NewUpload(
 	}
 
 	return true, &createdAt
-
 }
 
 // GetFileByKey retrieves a file from the database by its key.
 
 func (db *PostgresClient) GetFileByKey(
-
 	ctx context.Context,
 
 	key string,
-
 ) ([]byte, string, *string, *time.Time, error) {
-
 	query := `
 
 		SELECT file, mime_type, file_name, created_at
@@ -1167,27 +1034,20 @@ func (db *PostgresClient) GetFileByKey(
 
 		&createdAt,
 	)
-
 	if err != nil {
-
 		return nil, "", nil, nil, err
-
 	}
 
 	return content, mimeType, fileName, &createdAt, nil
-
 }
 
 // DeleteFileByKey deletes a file from the database by its key.
 
 func (db *PostgresClient) DeleteFileByKey(
-
 	ctx context.Context,
 
 	key string,
-
 ) bool {
-
 	query := `
 
 		DELETE FROM file_store
@@ -1199,19 +1059,15 @@ func (db *PostgresClient) DeleteFileByKey(
 	_, err := db.Pool.Exec(ctx, query, key)
 
 	return err == nil
-
 }
 
 // GetUploadCreatedAt retrieves the creation timestamp of an upload by its key.
 
 func (db *PostgresClient) GetUploadCreatedAt(
-
 	ctx context.Context,
 
 	key string,
-
 ) (*time.Time, error) {
-
 	query := `
 
 		SELECT created_at
@@ -1225,21 +1081,16 @@ func (db *PostgresClient) GetUploadCreatedAt(
 	var createdAt time.Time
 
 	err := db.Pool.QueryRow(ctx, query, key).Scan(&createdAt)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	return &createdAt, nil
-
 }
 
 // GetAllChannels retrieves all channels with state = 'JOINED', ordered by username.
 
 func (db *PostgresClient) GetAllChannels(ctx context.Context) ([]common.ChannelListItem, error) {
-
 	query := `
 
 		SELECT channel_id, username, platform, state
@@ -1253,11 +1104,8 @@ func (db *PostgresClient) GetAllChannels(ctx context.Context) ([]common.ChannelL
 	`
 
 	rows, err := db.Pool.Query(ctx, query)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	defer rows.Close()
@@ -1269,9 +1117,7 @@ func (db *PostgresClient) GetAllChannels(ctx context.Context) ([]common.ChannelL
 		var ch common.ChannelListItem
 
 		if err := rows.Scan(&ch.ChannelID, &ch.Username, &ch.Platform, &ch.State); err != nil {
-
 			return nil, err
-
 		}
 
 		channels = append(channels, ch)
@@ -1279,25 +1125,21 @@ func (db *PostgresClient) GetAllChannels(ctx context.Context) ([]common.ChannelL
 	}
 
 	return channels, rows.Err()
-
 }
 
 // UpdateUserSettings replaces the settings JSONB column for a user.
 
 func (db *PostgresClient) UpdateUserSettings(ctx context.Context, userID int, settings common.UserSettings) error {
-
 	query := `UPDATE users SET settings = $1 WHERE user_id = $2`
 
 	_, err := db.Pool.Exec(ctx, query, settings, userID)
 
 	return err
-
 }
 
 // UpdateChannelSettings replaces the settings JSONB column for a channel.
 
 func (db *PostgresClient) UpdateChannelSettings(
-
 	ctx context.Context,
 
 	channelID string,
@@ -1305,29 +1147,23 @@ func (db *PostgresClient) UpdateChannelSettings(
 	platform string,
 
 	settings common.ChannelSettings,
-
 ) error {
-
 	query := `UPDATE channels SET settings = $1 WHERE channel_id = $2 AND platform = $3`
 
 	_, err := db.Pool.Exec(ctx, query, settings, channelID, platform)
 
 	return err
-
 }
 
 // GetChannelSettingsByID retrieves only the settings column for a channel by its ID.
 
 func (db *PostgresClient) GetChannelSettingsByID(
-
 	ctx context.Context,
 
 	channelID string,
 
 	platform string,
-
 ) (common.ChannelSettings, error) {
-
 	var settings common.ChannelSettings
 
 	err := db.Pool.QueryRow(
@@ -1342,19 +1178,15 @@ func (db *PostgresClient) GetChannelSettingsByID(
 	).Scan(&settings)
 
 	return settings, err
-
 }
 
 // GetCommandSettings retrieves all command settings rows for a given channel.
 
 func (db *PostgresClient) GetCommandSettings(
-
 	ctx context.Context,
 
 	channelID string,
-
 ) ([]common.CommandSettings, error) {
-
 	query := `
 
 		SELECT
@@ -1394,11 +1226,8 @@ func (db *PostgresClient) GetCommandSettings(
 	`
 
 	rows, err := db.Pool.Query(ctx, query, channelID)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	defer rows.Close()
@@ -1437,9 +1266,7 @@ func (db *PostgresClient) GetCommandSettings(
 
 			&cs.AmbassadorGranted,
 		); err != nil {
-
 			return nil, err
-
 		}
 
 		results = append(results, cs)
@@ -1447,13 +1274,11 @@ func (db *PostgresClient) GetCommandSettings(
 	}
 
 	return results, rows.Err()
-
 }
 
 // UpsertCommandSettings inserts or updates a single command's settings row.
 
 func (db *PostgresClient) UpsertCommandSettings(ctx context.Context, cs common.CommandSettings) error {
-
 	query := `
 
 		INSERT INTO command_settings (
@@ -1493,9 +1318,7 @@ func (db *PostgresClient) UpsertCommandSettings(ctx context.Context, cs common.C
 	platform := cs.Platform
 
 	if platform == "" {
-
 		platform = "TWITCH"
-
 	}
 
 	_, err := db.Pool.Exec(
@@ -1512,13 +1335,11 @@ func (db *PostgresClient) UpsertCommandSettings(ctx context.Context, cs common.C
 	)
 
 	return err
-
 }
 
 // ResetCommandSettings resets a single command's overrides back to their defaults.
 
 func (db *PostgresClient) ResetCommandSettings(ctx context.Context, channelID, command string) error {
-
 	query := `
 
 		UPDATE command_settings SET
@@ -1548,49 +1369,38 @@ func (db *PostgresClient) ResetCommandSettings(ctx context.Context, channelID, c
 	_, err := db.Pool.Exec(ctx, query, channelID, command)
 
 	return err
-
 }
 
 // GetChannelAmbassadors returns the ambassadors slice for a channel, used for auth checks.
 
 func (db *PostgresClient) GetChannelAmbassadors(
-
 	ctx context.Context,
 
 	channelID string,
 
 	platform common.Platforms,
-
 ) ([]string, error) {
-
 	query := `SELECT ambassadors FROM channels WHERE channel_id = $1 AND platform = $2`
 
 	var ambassadors []string
 
 	err := db.Pool.QueryRow(ctx, query, channelID, platform).Scan(&ambassadors)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	return ambassadors, nil
-
 }
 
 // GetUserReminders retrieves all pending reminders for a user on a given platform.
 
 func (db *PostgresClient) GetUserReminders(
-
 	ctx context.Context,
 
 	userID string,
 
 	platform common.Platforms,
-
 ) ([]common.Reminder, error) {
-
 	query := `
 
 		SELECT
@@ -1608,11 +1418,8 @@ func (db *PostgresClient) GetUserReminders(
 	`
 
 	rows, err := db.Pool.Query(ctx, query, userID, platform)
-
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	defer rows.Close()
@@ -1629,9 +1436,7 @@ func (db *PostgresClient) GetUserReminders(
 
 			&r.Message, &r.ReadyAt, &r.SetAt, &r.AfkWithheld, &r.Status, &r.Platform, &r.SentAt, &r.Type,
 		); err != nil {
-
 			return nil, err
-
 		}
 
 		reminders = append(reminders, r)
@@ -1639,25 +1444,21 @@ func (db *PostgresClient) GetUserReminders(
 	}
 
 	return reminders, rows.Err()
-
 }
 
 // DeleteReminder hard-deletes a reminder by ID, verifying the owner platform ID.
 
 func (db *PostgresClient) DeleteReminder(ctx context.Context, reminderID int, recipientID string) error {
-
 	query := `DELETE FROM reminders WHERE reminder_id = $1 AND recipient_id = $2`
 
 	_, err := db.Pool.Exec(ctx, query, reminderID, recipientID)
 
 	return err
-
 }
 
 // UpsertOAuthToken stores or refreshes a platform OAuth token for a given user.
 
 func (db *PostgresClient) UpsertOAuthToken(
-
 	ctx context.Context,
 
 	platformID string,
@@ -1671,9 +1472,7 @@ func (db *PostgresClient) UpsertOAuthToken(
 	scope []string,
 
 	expiresIn int,
-
 ) error {
-
 	query := `
 
 		INSERT INTO connection_oauth (
@@ -1704,5 +1503,4 @@ func (db *PostgresClient) UpsertOAuthToken(
 	)
 
 	return err
-
 }

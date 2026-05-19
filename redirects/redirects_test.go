@@ -8,7 +8,6 @@ import (
 )
 
 func TestRedirects__CheckProtocolFormatAfterProtocolReformat(t *testing.T) {
-
 	redirector := redirects{}
 
 	tests := []struct {
@@ -16,7 +15,6 @@ func TestRedirects__CheckProtocolFormatAfterProtocolReformat(t *testing.T) {
 
 		expected string
 	}{
-
 		{"https://google.com", "https://google.com"},
 
 		{"http://google.com", "https://google.com"},
@@ -27,9 +25,7 @@ func TestRedirects__CheckProtocolFormatAfterProtocolReformat(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-
 		t.Run(tc.input, func(t *testing.T) {
-
 			cleanedURL := redirector.cleanRedirectProtocolSoLinksActuallyWork(tc.input)
 
 			assert.Truef(
@@ -38,9 +34,6 @@ func TestRedirects__CheckProtocolFormatAfterProtocolReformat(t *testing.T) {
 			)
 
 			assert.Equal(t, tc.expected, cleanedURL)
-
 		})
-
 	}
-
 }
