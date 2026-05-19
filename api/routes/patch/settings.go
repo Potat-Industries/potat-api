@@ -95,8 +95,12 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	// Resolve channel ID from ?id= or fall back to the user's own Twitch channel ID.
+	// Resolve channel ID and platform from query params or fall back to the users own Twitch channel.
 	channelID := request.URL.Query().Get("id")
+	platform := request.URL.Query().Get("platform")
+	if platform == "" {
+		platform = string(common.TWITCH)
+	}
 	if channelID == "" {
 		for _, conn := range user.Connections {
 			if conn.Platform == common.TWITCH {
@@ -123,7 +127,7 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	existingSettings, err := postgres.GetChannelSettingsByID(request.Context(), channelID)
+	existingSettings, err := postgres.GetChannelSettingsByID(request.Context(), channelID, platform)
 	if err != nil {
 		logger.Error.Printf("Error fetching channel settings: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, common.GenericResponse[any]{
@@ -142,7 +146,7 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	if err := postgres.UpdateChannelSettings(request.Context(), channelID, input); err != nil {
+	if err := postgres.UpdateChannelSettings(request.Context(), channelID, platform, input); err != nil {
 		logger.Error.Printf("Error updating channel settings: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Failed to update settings"}},

@@ -766,10 +766,11 @@ func (db *PostgresClient) UpdateUserSettings(ctx context.Context, userID int, se
 func (db *PostgresClient) UpdateChannelSettings(
 	ctx context.Context,
 	channelID string,
+	platform string,
 	settings common.ChannelSettings,
 ) error {
-	query := `UPDATE channels SET settings = $1 WHERE channel_id = $2`
-	_, err := db.Pool.Exec(ctx, query, settings, channelID)
+	query := `UPDATE channels SET settings = $1 WHERE channel_id = $2 AND platform = $3`
+	_, err := db.Pool.Exec(ctx, query, settings, channelID, platform)
 
 	return err
 }
@@ -778,9 +779,10 @@ func (db *PostgresClient) UpdateChannelSettings(
 func (db *PostgresClient) GetChannelSettingsByID(
 	ctx context.Context,
 	channelID string,
+	platform string,
 ) (common.ChannelSettings, error) {
 	var settings common.ChannelSettings
-	err := db.Pool.QueryRow(ctx, `SELECT settings FROM channels WHERE channel_id = $1`, channelID).Scan(&settings)
+	err := db.Pool.QueryRow(ctx, `SELECT settings FROM channels WHERE channel_id = $1 AND platform = $2`, channelID, platform).Scan(&settings)
 
 	return settings, err
 }
@@ -850,7 +852,7 @@ func (db *PostgresClient) UpsertCommandSettings(ctx context.Context, cs common.C
 			custom_cooldown, is_enabled, offline_only, silent_errors, allow_bots,
 			platform, ambassador_granted
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (channel_id, command) DO UPDATE SET
+		ON CONFLICT (channel_id, command, platform) DO UPDATE SET
 			permission         = EXCLUDED.permission,
 			users_blacklisted  = EXCLUDED.users_blacklisted,
 			users_whitelisted  = EXCLUDED.users_whitelisted,
