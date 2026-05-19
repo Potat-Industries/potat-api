@@ -59,7 +59,6 @@ func InitPostgres(ctx context.Context, config common.Config) (*PostgresClient, e
 }
 
 func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unparam
-
 	user := config.Postgres.User
 
 	if user == "" {
@@ -101,11 +100,9 @@ func loadConfig(config common.Config) (*pgxpool.Config, error) { //nolint:unpara
 
 	dbConfig, err := pgxpool.ParseConfig(constring)
 	if err != nil {
-
 		logger.Error.Panicln("Error parsing database config", err)
 
 		return nil, err
-
 	}
 
 	dbConfig.MaxConns = 32
@@ -283,7 +280,6 @@ func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string
 	var blocks []common.Block
 
 	for rows.Next() {
-
 		var block common.Block
 
 		err := rows.Scan(
@@ -303,7 +299,6 @@ func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string
 		}
 
 		blocks = append(blocks, block)
-
 	}
 
 	return &blocks
@@ -376,7 +371,6 @@ func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID stri
 	var commands []common.ChannelCommand
 
 	for rows.Next() {
-
 		var command common.ChannelCommand
 
 		err := rows.Scan(
@@ -430,7 +424,6 @@ func (db *PostgresClient) GetChannelCommands(ctx context.Context, channelID stri
 		}
 
 		commands = append(commands, command)
-
 	}
 
 	return &commands
@@ -499,7 +492,6 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 	`
 
 	switch chanType {
-
 	case "ID":
 
 		query += `WHERE c.channel_id = $1 `
@@ -511,7 +503,6 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 	default:
 
 		return nil, errInvalidType
-
 	}
 
 	query += `AND platform = $2;`
@@ -581,7 +572,6 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 	}
 
 	if len(blocks) > 0 {
-
 		channel.Blocks = common.FilteredBlocks{
 			Users: &[]common.Block{},
 
@@ -590,7 +580,6 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 
 		for _, block := range blocks {
 			switch block.BlockType {
-
 			case common.UserBlock:
 
 				*channel.Blocks.Users = append(*channel.Blocks.Users, block)
@@ -602,10 +591,8 @@ func (db *PostgresClient) getChannelByType( //nolint:cyclop
 			case common.GlobalBlock:
 
 				continue
-
 			}
 		}
-
 	} else {
 		channel.Blocks = common.FilteredBlocks{}
 	}
@@ -818,7 +805,6 @@ func (db *PostgresClient) BatchUserConections(
 	users := make(map[int][]common.UserConnection)
 
 	for rows.Next() {
-
 		var connection common.UserConnection
 
 		err := rows.Scan(
@@ -842,7 +828,6 @@ func (db *PostgresClient) BatchUserConections(
 		}
 
 		users[connection.ID] = append(users[connection.ID], connection)
-
 	}
 
 	return &users
@@ -989,11 +974,9 @@ func (db *PostgresClient) NewUpload(
 
 	err := db.Pool.QueryRow(ctx, query, file, name, mimeType, key).Scan(&createdAt)
 	if err != nil {
-
 		logger.Error.Println("Error scanning upload", err)
 
 		return false, nil
-
 	}
 
 	return true, &createdAt
@@ -1113,7 +1096,6 @@ func (db *PostgresClient) GetAllChannels(ctx context.Context) ([]common.ChannelL
 	var channels []common.ChannelListItem
 
 	for rows.Next() {
-
 		var ch common.ChannelListItem
 
 		if err := rows.Scan(&ch.ChannelID, &ch.Username, &ch.Platform, &ch.State); err != nil {
@@ -1121,7 +1103,6 @@ func (db *PostgresClient) GetAllChannels(ctx context.Context) ([]common.ChannelL
 		}
 
 		channels = append(channels, ch)
-
 	}
 
 	return channels, rows.Err()
@@ -1235,7 +1216,6 @@ func (db *PostgresClient) GetCommandSettings(
 	var results []common.CommandSettings
 
 	for rows.Next() {
-
 		var cs common.CommandSettings
 
 		if err := rows.Scan(
@@ -1270,7 +1250,6 @@ func (db *PostgresClient) GetCommandSettings(
 		}
 
 		results = append(results, cs)
-
 	}
 
 	return results, rows.Err()
@@ -1427,7 +1406,6 @@ func (db *PostgresClient) GetUserReminders(
 	var reminders []common.Reminder
 
 	for rows.Next() {
-
 		var r common.Reminder
 
 		if err := rows.Scan(
@@ -1440,7 +1418,6 @@ func (db *PostgresClient) GetUserReminders(
 		}
 
 		reminders = append(reminders, r)
-
 	}
 
 	return reminders, rows.Err()
