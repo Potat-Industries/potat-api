@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/Potat-Industries/potat-api/api"
+	"github.com/Potat-Industries/potat-api/api/middleware"
 	"github.com/Potat-Industries/potat-api/common"
+	"github.com/Potat-Industries/potat-api/common/db"
 	"github.com/Potat-Industries/potat-api/common/logger"
 	"github.com/Potat-Industries/potat-api/common/utils"
 	"github.com/google/uuid"
@@ -68,7 +70,6 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 
 	redirectURI := fmt.Sprintf("%slogin", config.Twitch.OauthURI)
 
-	// Redirect to twitch oauth
 	if code == "" {
 		params := url.Values{
 			"client_id":     {config.Twitch.ClientID},
@@ -84,7 +85,6 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		return
 	}
 
-	// Disallow replay attacks
 	if _, ok := replyDeny.Load(state); !ok {
 		http.Error(writer, "Forbidden", http.StatusForbidden)
 
@@ -116,7 +116,6 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		Timeout: 10 * time.Second,
 	}
 
-	// Excahnge code for access token
 	tokenResp, err := client.Do(req) //nolint:gosec
 	if err != nil {
 		http.Error(writer, "Failed to get access token", http.StatusInternalServerError)
@@ -139,7 +138,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 	ok, validation, err := utils.ValidateHelixToken(
 		request.Context(),
 		tokenData.AccessToken,
-		false,
+		true,
 	)
 	if err != nil || !ok || validation.UserID == "" {
 		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
@@ -150,16 +149,73 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		return
 	}
 
-	// check if user exists in the database
-	// user, err := db.Postgres.GetUserByConnection(
-	// 	r.Context(),
-	// 	validation.UserID,
-	// 	common.TWITCH,
-	// )
-	// if not send rabbitmq message to create user on potat
-	// if user created update data, set oauth token
+	postgres, ok := request.Context().Value(middleware.PostgresKey).(*db.PostgresClient)
+	if !ok {
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
-	// auth successful, close the popup and send token backarino
+		return
+	}
+
+	user, err := postgres.GetUserByPlatformID(request.Context(), validation.UserID, common.TWITCH)
+	if err != nil {
+		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
+			Data:   &[]SiteUserData{},
+			Errors: &[]common.ErrorMessage{{Message: "User not found"}},
+		}, start)
+
+		return
+	}
+
+	auth, ok := middleware.GetAuthenticator(request.Context())
+	if !ok {
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
+	token, err := auth.CreateJWT(user.ID)
+	if err != nil {
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
+	http.SetCookie(writer, &http.Cookie{
+		Name:     "authorization",
+		Value:    token,
+		Path:     "/",
+		Domain:   config.API.CookieDomain,
+		MaxAge:   183 * 24 * 60 * 60, // 183 days in seconds
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
+	})
+
+	dashboardOrigin := strings.Replace(config.Twitch.OauthURI, "api.", "", 1)
+
+	var twitchPFP, stvID string
+	for _, conn := range user.Connections {
+		switch conn.Platform {
+		case common.TWITCH:
+			twitchPFP = conn.PFP
+		case common.STV:
+			stvID = conn.UserID
+		}
+	}
+
+	payload, err := json.Marshal(map[string]any{
+		"id":     validation.UserID,
+		"login":  validation.Login,
+		"name":   user.Display,
+		"stv_id": stvID,
+		"pfp":    twitchPFP,
+	})
+	if err != nil {
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
 	html := fmt.Sprintf(`
 		<script>
 			if (window.opener) {
@@ -168,8 +224,8 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 			}
 		</script>
 		`,
-		string("token and stuff lol"),
-		strings.Replace(config.Twitch.OauthURI, "api.", "", 1),
+		string(payload),
+		dashboardOrigin,
 	)
 	writer.Header().Set("Content-Type", "text/html")
 	writer.WriteHeader(http.StatusOK)

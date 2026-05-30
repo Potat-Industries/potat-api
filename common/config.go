@@ -109,12 +109,13 @@ type BoolConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
-// APIConfig holds the configuration for various API services, including host, port, and authentication settings.
 type APIConfig struct {
-	Host    string `json:"host"`
-	Port    string `json:"port"`
-	AuthKey string `json:"authkey,omitempty"` //nolint:gosec
-	Enabled bool   `json:"enabled"`
+	CORSOrigins  []string `json:"cors_origins,omitempty"`
+	CookieDomain string   `json:"cookie_domain,omitempty"`
+	Host         string   `json:"host"`
+	Port         string   `json:"port"`
+	AuthKey      string   `json:"authkey,omitempty"` //nolint:gosec
+	Enabled      bool     `json:"enabled"`
 }
 
 // HasteConfig holds the configuration for the Hastebin service, including host, port, key length,

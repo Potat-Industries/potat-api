@@ -14,9 +14,13 @@ import (
 	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
-// SiteUserData represents the user data returned by the /twitch/me endpoint.
 type SiteUserData struct {
+	ID        string `json:"id"`
+	Login     string `json:"login"`
 	Name      string `json:"name"`
+	StvID     string `json:"stv_id"`
+	IsChannel bool   `json:"is_channel"`
+	Pfp       string `json:"pfp"`
 	TwitchPFP string `json:"twitch_pfp"`
 	StvPFP    string `json:"stv_pfp"`
 	ChatColor string `json:"chatColor"`
@@ -24,10 +28,15 @@ type SiteUserData struct {
 	JoinState string `json:"join_state"`
 }
 
-// AuthorizedUserResponse is the response type for the /twitch/me endpoint.
 type AuthorizedUserResponse = common.GenericResponse[SiteUserData]
 
 func init() {
+	api.SetRoute(api.Route{
+		Path:    "/me",
+		Method:  http.MethodGet,
+		Handler: getAuthenticatedUser,
+		UseAuth: true,
+	})
 	api.SetRoute(api.Route{
 		Path:    "/twitch/me",
 		Method:  http.MethodGet,
@@ -65,7 +74,6 @@ func getAuthenticatedUser(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	// Check userconnections length
 	if len(userData.Connections) == 0 {
 		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
 			Data:   &[]SiteUserData{},
@@ -99,13 +107,20 @@ func getAuthenticatedUser(writer http.ResponseWriter, request *http.Request) {
 
 	twitchMeta, stvMeta := parseMetadata(twitchConnection.Meta, stvConnection.Meta)
 
+	joinState := getChannelState(request.Context(), twitchConnection.UserID, common.TWITCH)
+
 	user := SiteUserData{
+		ID:        twitchConnection.UserID,
+		Login:     twitchConnection.Username,
 		Name:      userData.Display,
+		StvID:     stvConnection.UserID,
+		IsChannel: joinState != "NEVER",
+		Pfp:       twitchConnection.PFP,
 		TwitchPFP: twitchConnection.PFP,
 		StvPFP:    stvConnection.PFP,
 		ChatColor: twitchMeta.Color,
 		UserPaint: stvMeta.PaintID,
-		JoinState: getChannelState(request.Context(), twitchConnection.UserID, common.TWITCH),
+		JoinState: joinState,
 	}
 
 	api.GenericResponse(writer, http.StatusOK, AuthorizedUserResponse{

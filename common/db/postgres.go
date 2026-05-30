@@ -247,6 +247,64 @@ func (db *PostgresClient) GetUserByInternalID(ctx context.Context, id int) (*com
 	return &user, nil
 }
 
+func (db *PostgresClient) GetUserByPlatformID(ctx context.Context, platformID string, platform common.Platforms) (*common.User, error) {
+	query := `
+
+		SELECT
+
+			u.user_id,
+
+			u.username,
+
+			u.display,
+
+			u.first_seen,
+
+			u.level,
+
+			u.settings,
+
+			json_agg(uc) AS connections
+
+		FROM users u
+
+		JOIN user_connections uc ON u.user_id = uc.user_id
+
+		WHERE u.user_id = (
+
+			SELECT user_id FROM user_connections WHERE platform_id = $1 AND platform = $2 LIMIT 1
+
+		)
+
+		GROUP BY u.user_id;
+
+	`
+
+	var user common.User
+
+	err := db.Pool.QueryRow(ctx, query, platformID, string(platform)).Scan(
+
+		&user.ID,
+
+		&user.Username,
+
+		&user.Display,
+
+		&user.FirstSeen,
+
+		&user.Level,
+
+		&user.Settings,
+
+		&user.Connections,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // GetChannelBlocks retrieves all blocks for a given channel from the database.
 
 func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {

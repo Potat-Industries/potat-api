@@ -23,7 +23,6 @@ var (
 
 type unauthorizedResponse = common.GenericResponse[string]
 
-// AuthenticatedUser is the key for the authenticated user in the request context.
 type AuthenticatedUser string
 
 type potatClaims struct {
@@ -38,21 +37,33 @@ type unauthFunc func(
 	start time.Time,
 )
 
-// Authenticator provides middleware for authenticating requests.
 type Authenticator struct {
 	unauthorizedFunc unauthFunc
 	secret           []byte
 }
 
-// AuthedUser is the key for the authenticated user in the request context.
 const AuthedUser = AuthenticatedUser("authenticated-user")
 
-// NewAuthenticator creates a new authenticator with the provided secret.
 func NewAuthenticator(secret string, unauthorizedFunc unauthFunc) *Authenticator {
 	return &Authenticator{
 		secret:           []byte(secret),
 		unauthorizedFunc: unauthorizedFunc,
 	}
+}
+
+func (a *Authenticator) InjectAuthenticator() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(r.Context(), AuthenticatorKey, a)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func GetAuthenticator(ctx context.Context) (*Authenticator, bool) {
+	a, ok := ctx.Value(AuthenticatorKey).(*Authenticator)
+
+	return a, ok
 }
 
 func (a *Authenticator) sendUnauthorized(w http.ResponseWriter) {
@@ -63,7 +74,6 @@ func (a *Authenticator) sendUnauthorized(w http.ResponseWriter) {
 	}, time.Now())
 }
 
-// SetStaticAuthMiddleware returns a middleware that verifies the provided static auth key.
 func (a *Authenticator) SetStaticAuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -82,11 +92,16 @@ func (a *Authenticator) verifySimpleAuthKey(provided string) bool {
 	return subtle.ConstantTimeCompare([]byte(provided), a.secret) == 1
 }
 
-// SetDynamicAuthMiddleware returns a middleware that verifies the provided dynamic auth token.
 func (a *Authenticator) SetDynamicAuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			token := request.Header.Get("Authorization")
+			token := ""
+			if cookie, err := request.Cookie("authorization"); err == nil {
+				token = cookie.Value
+			}
+			if token == "" {
+				token = request.Header.Get("Authorization")
+			}
 			if token == "" {
 				a.sendUnauthorized(writer)
 
@@ -151,7 +166,6 @@ func (a *Authenticator) verifyJWT(tokenString string) (*potatClaims, error) {
 	return nil, errInvalidToken
 }
 
-// CreateJWT creates a new JWT token for the provided user ID.
 func (a *Authenticator) CreateJWT(userID int) (string, error) {
 	claims := potatClaims{
 		UserID: userID,
