@@ -16,6 +16,8 @@ import (
 	"github.com/Potat-Industries/potat-api/common/utils"
 )
 
+const commandBridgeTimeout = 5 * time.Second
+
 // HelpResponse is the response type for the /help endpoint.
 type HelpResponse = common.GenericResponse[common.Command]
 
@@ -113,19 +115,8 @@ func getCommandsHandler(writer http.ResponseWriter, request *http.Request) {
 	}
 	writer.Header().Set("X-Cache-Hit", "MISS")
 
-	nats, ok := request.Context().Value(middleware.NatsKey).(*utils.NatsClient)
-	if !ok || nats == nil {
-		logger.Error.Println("NATS client not found in context")
-		api.GenericResponse(writer, http.StatusServiceUnavailable, HelpResponse{
-			Data:   &[]common.Command{},
-			Errors: &[]common.ErrorMessage{{Message: "Service unavailable"}},
-		}, start)
-
-		return
-	}
-
-	response, err := nats.BridgeRequest(
-		5*time.Second,
+	response, err := utils.BridgeRequest(
+		commandBridgeTimeout,
 		"get-commands",
 	)
 	if err != nil {

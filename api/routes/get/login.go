@@ -3,6 +3,7 @@ package get
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -21,9 +22,11 @@ import (
 
 //nolint:gosec,lll
 const (
-	twitchOauthURI   = "https://id.twitch.tv/oauth2/authorize"
-	twitchOauthToken = "https://id.twitch.tv/oauth2/token"
-	scopes           = "channel:bot chat:read user:read:moderated_channels channel:manage:broadcast channel:manage:redemptions channel:read:subscriptions moderator:read:followers channel:read:hype_train channel:read:guest_star"
+	twitchOauthURI    = "https://id.twitch.tv/oauth2/authorize"
+	twitchOauthToken  = "https://id.twitch.tv/oauth2/token"
+	scopes            = "bits:read chat:read chat:edit user:read:emotes user:read:moderated_channels channel:manage:broadcast channel:manage:redemptions channel:manage:ads channel:edit:commercial channel:read:subscriptions channel:read:guest_star channel:read:hype_train channel:read:charity channel:read:goals channel:read:polls channel:read:vips channel:read:predictions channel:moderate channel:bot moderator:read:followers moderator:read:chatters moderator:read:automod_settings moderator:read:blocked_terms moderator:read:chat_settings moderator:read:shield_mode"
+	replyDenyTTL      = 20 * time.Second
+	httpClientTimeout = 10 * time.Second
 )
 
 var replyDeny sync.Map //nolint:gochecknoglobals // Used to prevent replay attacks on the oauth flow.
@@ -41,7 +44,7 @@ func setReplyDeny() string {
 	nonce := uuid.New().String()
 	replyDeny.Store(nonce, true)
 	go func(n string) {
-		time.Sleep(20 * time.Second)
+		time.Sleep(replyDenyTTL)
 		replyDeny.Delete(n)
 	}(nonce)
 
@@ -68,7 +71,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 	code := query.Get("code")
 	state := query.Get("state")
 
-	redirectURI := fmt.Sprintf("%slogin", config.Twitch.OauthURI)
+	redirectURI := strings.TrimRight(config.Twitch.OauthURI, "/") + "/login"
 
 	if code == "" {
 		params := url.Values{
@@ -113,7 +116,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 	}
 
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: httpClientTimeout,
 	}
 
 	tokenResp, err := client.Do(req) //nolint:gosec
@@ -138,9 +141,9 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 	ok, validation, err := utils.ValidateHelixToken(
 		request.Context(),
 		tokenData.AccessToken,
-		true,
+		true, // returnAll = true to get login + user_id
 	)
-	if err != nil || !ok || validation.UserID == "" {
+	if err != nil || !ok {
 		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
 			Data:   &[]SiteUserData{},
 			Errors: &[]common.ErrorMessage{{Message: "Failed to validate access token"}},
@@ -151,6 +154,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 
 	postgres, ok := request.Context().Value(middleware.PostgresKey).(*db.PostgresClient)
 	if !ok {
+		logger.Error.Println("Postgres client not found in context")
 		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 
 		return
@@ -219,7 +223,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 	html := fmt.Sprintf(`
 		<script>
 			if (window.opener) {
-				window.opener.postMessage(%s, '%s');
+				window.opener.postMessage(%s, '*');
 				window.close();
 			}
 		</script>

@@ -18,6 +18,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	loadUserWorkerCount = 9
+	maxUsersPerRequest  = 25
+)
+
 type potatoInfo struct {
 	JoinedAt      string  `json:"joinedAt"`
 	Steal         steal   `json:"steal"`
@@ -202,7 +207,7 @@ func loadUser(ctx context.Context, user string) UserInfo { //nolint:gocognit,cyc
 
 	var wg sync.WaitGroup
 
-	wg.Add(9)
+	wg.Add(loadUserWorkerCount)
 
 	var userData *common.User
 	var channelData *common.Channel
@@ -351,8 +356,8 @@ func getUsers(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	userArray := strings.Split(word, ",")
-	if len(userArray) > 25 {
-		err := fmt.Sprintf("Too many users provided. Expected 1-25, found %d", len(userArray))
+	if len(userArray) > maxUsersPerRequest {
+		err := fmt.Sprintf("Too many users provided. Expected 1-%d, found %d", maxUsersPerRequest, len(userArray))
 
 		res := UsersResponse{
 			Data:   &[]UserInfo{},

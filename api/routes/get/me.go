@@ -23,9 +23,11 @@ type SiteUserData struct {
 	Pfp       string `json:"pfp"`
 	TwitchPFP string `json:"twitch_pfp"`
 	StvPFP    string `json:"stv_pfp"`
+	TwitchPFP string `json:"twitch_pfp"` //nolint:tagliatelle // API contract uses snake_case
+	StvPFP    string `json:"stv_pfp"`    //nolint:tagliatelle // API contract uses snake_case
 	ChatColor string `json:"chatColor"`
 	UserPaint string `json:"userPaint"`
-	JoinState string `json:"join_state"`
+	JoinState string `json:"join_state"` //nolint:tagliatelle // API contract uses snake_case
 }
 
 type AuthorizedUserResponse = common.GenericResponse[SiteUserData]
