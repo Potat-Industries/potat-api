@@ -32,13 +32,13 @@ jobs:
 
       - name: Run test
         run: |
-          TEST_BENCH_OPTION="-bench=."
-
           set -euo pipefail
           go-acc -o cover.out ./... -- \
-            ${TEST_BENCH_OPTION} \
             -json \
             -v -race 2>&1 | grep -v '^go: downloading' | tee /tmp/gotest.log | gotestfmt
+
+      - name: Run benchmarks
+        run: go test -bench=. -benchmem -run='^$' ./...
 
       - name: Upload test log
         uses: actions/upload-artifact@v4

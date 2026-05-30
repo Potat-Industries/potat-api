@@ -21,8 +21,6 @@ type SiteUserData struct {
 	StvID     string `json:"stv_id"`
 	IsChannel bool   `json:"is_channel"`
 	Pfp       string `json:"pfp"`
-	TwitchPFP string `json:"twitch_pfp"`
-	StvPFP    string `json:"stv_pfp"`
 	TwitchPFP string `json:"twitch_pfp"` //nolint:tagliatelle // API contract uses snake_case
 	StvPFP    string `json:"stv_pfp"`    //nolint:tagliatelle // API contract uses snake_case
 	ChatColor string `json:"chatColor"`
