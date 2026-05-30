@@ -247,7 +247,9 @@ func (db *PostgresClient) GetUserByInternalID(ctx context.Context, id int) (*com
 	return &user, nil
 }
 
-func (db *PostgresClient) GetUserByPlatformID(ctx context.Context, platformID string, platform common.Platforms) (*common.User, error) {
+func (db *PostgresClient) GetUserByPlatformID(
+	ctx context.Context, platformID string, platform common.Platforms,
+) (*common.User, error) {
 	query := `
 
 		SELECT

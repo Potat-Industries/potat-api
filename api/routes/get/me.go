@@ -14,18 +14,20 @@ import (
 	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
+const neverJoined = "NEVER"
+
 type SiteUserData struct {
 	ID        string `json:"id"`
 	Login     string `json:"login"`
 	Name      string `json:"name"`
 	StvID     string `json:"stv_id"`
-	IsChannel bool   `json:"is_channel"`
 	Pfp       string `json:"pfp"`
 	TwitchPFP string `json:"twitch_pfp"` //nolint:tagliatelle // API contract uses snake_case
 	StvPFP    string `json:"stv_pfp"`    //nolint:tagliatelle // API contract uses snake_case
 	ChatColor string `json:"chatColor"`
 	UserPaint string `json:"userPaint"`
 	JoinState string `json:"join_state"` //nolint:tagliatelle // API contract uses snake_case
+	IsChannel bool   `json:"is_channel"`
 }
 
 type AuthorizedUserResponse = common.GenericResponse[SiteUserData]
@@ -50,12 +52,12 @@ func getChannelState(ctx context.Context, channelID string, platform common.Plat
 	if !ok {
 		logger.Error.Println("Postgres client not found in context")
 
-		return "NEVER"
+		return neverJoined
 	}
 
 	channelData, err := postgres.GetChannelByID(ctx, channelID, platform)
 	if err != nil {
-		return "NEVER"
+		return neverJoined
 	}
 
 	return channelData.State
@@ -114,7 +116,7 @@ func getAuthenticatedUser(writer http.ResponseWriter, request *http.Request) {
 		Login:     twitchConnection.Username,
 		Name:      userData.Display,
 		StvID:     stvConnection.UserID,
-		IsChannel: joinState != "NEVER",
+		IsChannel: joinState != neverJoined,
 		Pfp:       twitchConnection.PFP,
 		TwitchPFP: twitchConnection.PFP,
 		StvPFP:    stvConnection.PFP,

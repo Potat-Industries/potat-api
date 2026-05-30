@@ -42,25 +42,25 @@ func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	}
 
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			origin := request.Header.Get("Origin")
 			if origin != "" {
 				if _, ok := allowed[origin]; ok {
-					w.Header().Set("Access-Control-Allow-Origin", origin)
-					w.Header().Set("Access-Control-Allow-Credentials", "true")
-					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-					w.Header().Add("Vary", "Origin")
+					writer.Header().Set("Access-Control-Allow-Origin", origin)
+					writer.Header().Set("Access-Control-Allow-Credentials", "true")
+					writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+					writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+					writer.Header().Add("Vary", "Origin")
 				}
 			}
 
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
+			if request.Method == http.MethodOptions {
+				writer.WriteHeader(http.StatusNoContent)
 
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(writer, request)
 		})
 	}
 }
@@ -83,19 +83,19 @@ func csrfMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	}
 
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if _, isMutating := mutating[r.Method]; isMutating {
-				origin := r.Header.Get("Origin")
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if _, isMutating := mutating[request.Method]; isMutating {
+				origin := request.Header.Get("Origin")
 				if origin != "" {
 					if _, ok := allowed[origin]; !ok {
-						http.Error(w, "Forbidden", http.StatusForbidden)
+						http.Error(writer, "Forbidden", http.StatusForbidden)
 
 						return
 					}
 				}
 			}
 
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(writer, request)
 		})
 	}
 }

@@ -194,8 +194,6 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		SameSite: http.SameSiteNoneMode,
 	})
 
-	dashboardOrigin := strings.Replace(config.Twitch.OauthURI, "api.", "", 1)
-
 	var twitchPFP, stvID string
 	for _, conn := range user.Connections {
 		switch conn.Platform {
@@ -203,6 +201,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 			twitchPFP = conn.PFP
 		case common.STV:
 			stvID = conn.UserID
+		default:
 		}
 	}
 
@@ -228,7 +227,6 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		</script>
 		`,
 		string(payload),
-		dashboardOrigin,
 	)
 	writer.Header().Set("Content-Type", "text/html")
 	writer.WriteHeader(http.StatusOK)

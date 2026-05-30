@@ -109,7 +109,7 @@ type BoolConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
-type APIConfig struct {
+type APIConfig struct { //nolint:govet
 	CORSOrigins  []string `json:"cors_origins,omitempty"`
 	CookieDomain string   `json:"cookie_domain,omitempty"`
 	Host         string   `json:"host"`
