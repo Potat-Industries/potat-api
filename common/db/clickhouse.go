@@ -117,7 +117,7 @@ func (db *ClickhouseClient) GetEmoteStats( //nolint:cyclop
 	}
 	fmt.Fprintf(&sb, " ORDER BY count %s", order)
 
-	limit := max(1, min(opts.Limit, 300)) + 1
+	limit := max(1, min(opts.Limit, 300))
 	fmt.Fprintf(&sb, " LIMIT %d", limit)
 
 	if opts.Offset > 0 {

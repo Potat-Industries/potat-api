@@ -159,6 +159,19 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		return
 	}
 
+	// Upsert OAuth token (non-fatal) so background token validation/refresh can work.
+	if upsertErr := postgres.UpsertOAuthToken(
+		request.Context(),
+		validation.UserID,
+		common.TWITCH,
+		tokenData.AccessToken,
+		tokenData.RefreshToken,
+		tokenData.Scope,
+		tokenData.ExpiresIn,
+	); upsertErr != nil {
+		logger.Warn.Println("Failed to upsert OAuth token:", upsertErr)
+	}
+
 	user, err := postgres.GetUserByPlatformID(request.Context(), validation.UserID, common.TWITCH)
 	if err != nil {
 		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{

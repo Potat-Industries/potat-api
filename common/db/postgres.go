@@ -311,23 +311,14 @@ func (db *PostgresClient) GetUserByPlatformID(
 
 func (db *PostgresClient) GetChannelBlocks(ctx context.Context, channelID string) *[]common.Block {
 	query := `
-
 		SELECT
-
-		  user_id
-
+			user_id,
 			block_id,
-
 			channel_id,
-
 			block_type,
-
 			block_data
-
 		FROM blocks
-
 		WHERE channel_id = $1
-
 	`
 
 	rows, err := db.Pool.Query(ctx, query, channelID)
