@@ -51,6 +51,20 @@ func setReplyDeny() string {
 	return nonce
 }
 
+func loginPostMessageOrigin(oauthURI string) string {
+	parsed, err := url.Parse(oauthURI)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return strings.Replace(strings.TrimRight(oauthURI, "/"), "api.", "", 1)
+	}
+
+	origin := url.URL{
+		Scheme: parsed.Scheme,
+		Host:   strings.TrimPrefix(parsed.Host, "api."),
+	}
+
+	return origin.String()
+}
+
 func handleErr(w http.ResponseWriter, start time.Time) {
 	if r := recover(); r != nil {
 		api.GenericResponse(w, http.StatusInternalServerError, common.GenericResponse[any]{
@@ -60,7 +74,7 @@ func handleErr(w http.ResponseWriter, start time.Time) {
 	}
 }
 
-func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //nolint:cyclop
+func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //nolint:cyclop,maintidx
 	start := time.Now()
 
 	config := utils.LoadConfig()
@@ -250,15 +264,24 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		return
 	}
 
+	targetOriginJSON, err := json.Marshal(loginPostMessageOrigin(config.Twitch.OauthURI))
+	if err != nil {
+		logger.Error.Println("Failed to marshal login target origin: ", err)
+		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
 	html := fmt.Sprintf(`
 		<script>
 			if (window.opener) {
-				window.opener.postMessage(%s, '*');
+				window.opener.postMessage(%s, %s);
 				window.close();
 			}
 		</script>
 		`,
 		string(payloadJSON),
+		string(targetOriginJSON),
 	)
 	writer.Header().Set("Content-Type", "text/html")
 	writer.WriteHeader(http.StatusOK)
