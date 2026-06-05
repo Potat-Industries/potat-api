@@ -232,7 +232,7 @@ func twitchLoginHandler(writer http.ResponseWriter, request *http.Request) { //n
 		}
 	}
 
-	payload, err := json.Marshal(map[string]any{
+	payloadJSON, err := json.Marshal(map[string]any{
 		"id":     validation.UserID,
 		"login":  validation.Login,
 		"name":   user.Display,
