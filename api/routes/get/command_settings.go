@@ -25,8 +25,8 @@ func init() {
 	})
 }
 
-// resolveChannelID returns the channel ID from ?id= or defaults to the authenticated user's Twitch ID.
-func resolveChannelID(request *http.Request, user *common.User) string {
+// resolveChannelID returns the channel ID from ?id= or defaults to the authenticated user's platform ID.
+func resolveChannelID(request *http.Request, user *common.User, platform common.Platforms) string {
 	if id := request.URL.Query().Get("id"); id != "" {
 		return id
 	}
@@ -36,7 +36,7 @@ func resolveChannelID(request *http.Request, user *common.User) string {
 		return id
 	}
 
-	return middleware.GetTwitchPlatformID(user)
+	return middleware.GetPlatformID(user, platform)
 }
 
 func getCommandSettingsHandler(writer http.ResponseWriter, request *http.Request) {
@@ -61,7 +61,12 @@ func getCommandSettingsHandler(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	channelID := resolveChannelID(request, user)
+	platform := common.Platforms(request.URL.Query().Get("platform"))
+	if platform == "" {
+		platform = common.TWITCH
+	}
+
+	channelID := resolveChannelID(request, user, platform)
 	if channelID == "" {
 		api.GenericResponse(writer, http.StatusBadRequest, CommandSettingsResponse{
 			Errors: &[]common.ErrorMessage{{Message: "channel id is required"}},
@@ -70,7 +75,7 @@ func getCommandSettingsHandler(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, platform, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, CommandSettingsResponse{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)

@@ -95,15 +95,15 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	// Resolve channel ID and platform from query params or fall back to the users own Twitch channel.
+	// Resolve channel ID and platform from query params or fall back to the users own channel.
 	channelID := request.URL.Query().Get("id")
-	platform := request.URL.Query().Get("platform")
+	platform := common.Platforms(request.URL.Query().Get("platform"))
 	if platform == "" {
-		platform = string(common.TWITCH)
+		platform = common.TWITCH
 	}
 	if channelID == "" {
 		for _, conn := range user.Connections {
-			if conn.Platform == common.TWITCH {
+			if conn.Platform == platform {
 				channelID = conn.UserID
 
 				break
@@ -119,7 +119,7 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, platform, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)
@@ -127,7 +127,7 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	existingSettings, err := postgres.GetChannelSettingsByID(request.Context(), channelID, platform)
+	existingSettings, err := postgres.GetChannelSettingsByID(request.Context(), channelID, string(platform))
 	if err != nil {
 		logger.Error.Printf("Error fetching channel settings: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, common.GenericResponse[any]{
@@ -146,7 +146,7 @@ func patchChannelSettings(writer http.ResponseWriter, request *http.Request) { /
 		return
 	}
 
-	if err := postgres.UpdateChannelSettings(request.Context(), channelID, platform, input); err != nil {
+	if err := postgres.UpdateChannelSettings(request.Context(), channelID, string(platform), input); err != nil {
 		logger.Error.Printf("Error updating channel settings: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Failed to update settings"}},

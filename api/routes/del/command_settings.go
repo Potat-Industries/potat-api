@@ -44,9 +44,14 @@ func deleteCommandSettings(writer http.ResponseWriter, request *http.Request) { 
 	}
 
 	channelID := request.URL.Query().Get("id")
+	platform := common.Platforms(request.URL.Query().Get("platform"))
+	if platform == "" {
+		platform = common.TWITCH
+	}
+
 	if channelID == "" {
 		for _, conn := range user.Connections {
-			if conn.Platform == common.TWITCH {
+			if conn.Platform == platform {
 				channelID = conn.UserID
 
 				break
@@ -64,7 +69,7 @@ func deleteCommandSettings(writer http.ResponseWriter, request *http.Request) { 
 		return
 	}
 
-	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, platform, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)

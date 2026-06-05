@@ -58,9 +58,14 @@ func putCommandSettings(writer http.ResponseWriter, request *http.Request) { //n
 		channelID = request.URL.Query().Get("id")
 	}
 
+	platform := common.Platforms(request.URL.Query().Get("platform"))
+	if platform == "" {
+		platform = common.TWITCH
+	}
+
 	if channelID == "" {
 		for _, conn := range user.Connections {
-			if conn.Platform == common.TWITCH {
+			if conn.Platform == platform {
 				channelID = conn.UserID
 
 				break
@@ -78,7 +83,7 @@ func putCommandSettings(writer http.ResponseWriter, request *http.Request) { //n
 
 	input.ChannelID = channelID
 
-	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, platform, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, common.GenericResponse[any]{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)

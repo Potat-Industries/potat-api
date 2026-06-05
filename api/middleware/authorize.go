@@ -8,10 +8,10 @@ import (
 	"github.com/Potat-Industries/potat-api/common/db"
 )
 
-// GetTwitchPlatformID returns the Twitch platform user ID from a user's connections, or empty string if not found.
-func GetTwitchPlatformID(user *common.User) string {
+// GetPlatformID returns the platform user ID for the given platform from a user's connections, or empty string if not found.
+func GetPlatformID(user *common.User, platform common.Platforms) string {
 	for _, conn := range user.Connections {
-		if conn.Platform == common.TWITCH {
+		if conn.Platform == platform {
 			return conn.UserID
 		}
 	}
@@ -25,22 +25,23 @@ func IsChannelAuthorized(
 	request *http.Request,
 	user *common.User,
 	channelID string,
+	platform common.Platforms,
 	postgres *db.PostgresClient,
 ) bool {
 	if user.Level >= int(common.ADMIN) {
 		return true
 	}
 
-	twitchID := GetTwitchPlatformID(user)
+	platformID := GetPlatformID(user, platform)
 
-	if twitchID == channelID {
+	if platformID == channelID {
 		return true
 	}
 
-	ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, common.TWITCH)
+	ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, platform)
 	if err != nil {
 		return false
 	}
 
-	return slices.Contains(ambassadors, twitchID)
+	return slices.Contains(ambassadors, platformID)
 }

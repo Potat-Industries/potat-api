@@ -45,7 +45,12 @@ func getAmbassadorsHandler(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	channelID := resolveChannelID(request, user)
+	platform := common.Platforms(request.URL.Query().Get("platform"))
+	if platform == "" {
+		platform = common.TWITCH
+	}
+
+	channelID := resolveChannelID(request, user, platform)
 	if channelID == "" {
 		api.GenericResponse(writer, http.StatusBadRequest, AmbassadorsResponse{
 			Errors: &[]common.ErrorMessage{{Message: "Could not resolve channel ID"}},
@@ -54,7 +59,7 @@ func getAmbassadorsHandler(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	if !middleware.IsChannelAuthorized(request, user, channelID, postgres) {
+	if !middleware.IsChannelAuthorized(request, user, channelID, platform, postgres) {
 		api.GenericResponse(writer, http.StatusForbidden, AmbassadorsResponse{
 			Errors: &[]common.ErrorMessage{{Message: "Forbidden"}},
 		}, start)
@@ -62,7 +67,7 @@ func getAmbassadorsHandler(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, common.TWITCH)
+	ambassadors, err := postgres.GetChannelAmbassadors(request.Context(), channelID, platform)
 	if err != nil {
 		logger.Error.Printf("Error fetching ambassadors: %v", err)
 		api.GenericResponse(writer, http.StatusInternalServerError, AmbassadorsResponse{
