@@ -8,7 +8,8 @@ import (
 	"github.com/Potat-Industries/potat-api/common/db"
 )
 
-// GetPlatformID returns the platform user ID for the given platform from a user's connections, or empty string if not found.
+// GetPlatformID returns the platform user ID for the given platform from a user's connections,
+// or empty string if not found.
 func GetPlatformID(user *common.User, platform common.Platforms) string {
 	for _, conn := range user.Connections {
 		if conn.Platform == platform {
