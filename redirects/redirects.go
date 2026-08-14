@@ -16,6 +16,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const REDIRECTS_URL = "https://potat.app/redirects"
+
 const createTable = `
 	CREATE TABLE IF NOT EXISTS url_redirects (
 		key VARCHAR(9) PRIMARY KEY,
@@ -102,7 +104,7 @@ func (r *redirects) getRedirect(writer http.ResponseWriter, request *http.Reques
 	vars := mux.Vars(request)
 	key := vars["id"]
 	if key == "" {
-		http.NotFound(writer, request)
+		http.Redirect(writer, request, REDIRECTS_URL, http.StatusSeeOther)
 
 		return
 	}
