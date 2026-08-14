@@ -14,20 +14,31 @@ import (
 	"github.com/Potat-Industries/potat-api/common/logger"
 )
 
-// SiteUserData represents the user data returned by the /twitch/me endpoint.
+const neverJoined = "NEVER"
+
 type SiteUserData struct {
+	ID        string `json:"id"`
+	Login     string `json:"login"`
 	Name      string `json:"name"`
+	StvID     string `json:"stv_id"`
+	Pfp       string `json:"pfp"`
 	TwitchPFP string `json:"twitch_pfp"` //nolint:tagliatelle // API contract uses snake_case
 	StvPFP    string `json:"stv_pfp"`    //nolint:tagliatelle // API contract uses snake_case
 	ChatColor string `json:"chatColor"`
 	UserPaint string `json:"userPaint"`
 	JoinState string `json:"join_state"` //nolint:tagliatelle // API contract uses snake_case
+	IsChannel bool   `json:"is_channel"`
 }
 
-// AuthorizedUserResponse is the response type for the /twitch/me endpoint.
 type AuthorizedUserResponse = common.GenericResponse[SiteUserData]
 
 func init() {
+	api.SetRoute(api.Route{
+		Path:    "/me",
+		Method:  http.MethodGet,
+		Handler: getAuthenticatedUser,
+		UseAuth: true,
+	})
 	api.SetRoute(api.Route{
 		Path:    "/twitch/me",
 		Method:  http.MethodGet,
@@ -41,12 +52,12 @@ func getChannelState(ctx context.Context, channelID string, platform common.Plat
 	if !ok {
 		logger.Error.Println("Postgres client not found in context")
 
-		return "NEVER"
+		return neverJoined
 	}
 
 	channelData, err := postgres.GetChannelByID(ctx, channelID, platform)
 	if err != nil {
-		return "NEVER"
+		return neverJoined
 	}
 
 	return channelData.State
@@ -65,7 +76,6 @@ func getAuthenticatedUser(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	// Check userconnections length
 	if len(userData.Connections) == 0 {
 		api.GenericResponse(writer, http.StatusUnauthorized, AuthorizedUserResponse{
 			Data:   &[]SiteUserData{},
@@ -99,13 +109,20 @@ func getAuthenticatedUser(writer http.ResponseWriter, request *http.Request) {
 
 	twitchMeta, stvMeta := parseMetadata(twitchConnection.Meta, stvConnection.Meta)
 
+	joinState := getChannelState(request.Context(), twitchConnection.UserID, common.TWITCH)
+
 	user := SiteUserData{
+		ID:        twitchConnection.UserID,
+		Login:     twitchConnection.Username,
 		Name:      userData.Display,
+		StvID:     stvConnection.UserID,
+		IsChannel: joinState != neverJoined,
+		Pfp:       twitchConnection.PFP,
 		TwitchPFP: twitchConnection.PFP,
 		StvPFP:    stvConnection.PFP,
 		ChatColor: twitchMeta.Color,
 		UserPaint: stvMeta.PaintID,
-		JoinState: getChannelState(request.Context(), twitchConnection.UserID, common.TWITCH),
+		JoinState: joinState,
 	}
 
 	api.GenericResponse(writer, http.StatusOK, AuthorizedUserResponse{

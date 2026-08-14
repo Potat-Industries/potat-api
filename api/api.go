@@ -15,7 +15,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Route represents a single API route with its handler, path, method, and authentication requirement.
 type Route struct {
 	Handler http.HandlerFunc
 	Path    string
@@ -23,7 +22,6 @@ type Route struct {
 	UseAuth bool
 }
 
-// Server represents the API server, including the main router and an authenticated sub-router.
 type Server struct {
 	server       *http.Server
 	router       *mux.Router
@@ -37,12 +35,77 @@ type register struct {
 
 var registry = &register{} //nolint:gochecknoglobals // Used to conveniently register API routes.
 
-// StartServing initializes and starts the API server with the configured routes and middleware.
+func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = struct{}{}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			origin := request.Header.Get("Origin")
+			if origin != "" {
+				if _, ok := allowed[origin]; ok {
+					writer.Header().Set("Access-Control-Allow-Origin", origin)
+					writer.Header().Set("Access-Control-Allow-Credentials", "true")
+					writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+					writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+					writer.Header().Add("Vary", "Origin")
+				}
+			}
+
+			if request.Method == http.MethodOptions {
+				writer.WriteHeader(http.StatusNoContent)
+
+				return
+			}
+
+			next.ServeHTTP(writer, request)
+		})
+	}
+}
+
+func csrfMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	if len(allowedOrigins) == 0 {
+		return func(next http.Handler) http.Handler { return next }
+	}
+
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = struct{}{}
+	}
+
+	mutating := map[string]struct{}{
+		http.MethodPost:   {},
+		http.MethodPut:    {},
+		http.MethodPatch:  {},
+		http.MethodDelete: {},
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if _, isMutating := mutating[request.Method]; isMutating {
+				origin := request.Header.Get("Origin")
+				if origin != "" {
+					if _, ok := allowed[origin]; !ok {
+						http.Error(writer, "Forbidden", http.StatusForbidden)
+
+						return
+					}
+				}
+			}
+
+			next.ServeHTTP(writer, request)
+		})
+	}
+}
+
 func StartServing(
 	config common.Config,
 	postgres *db.PostgresClient,
 	redis *db.RedisClient,
 	clickhouse *db.ClickhouseClient,
+	nats *utils.NatsClient,
 	metrics *utils.Metrics,
 ) error {
 	if config.API.Host == "" || config.API.Port == "" {
@@ -53,12 +116,16 @@ func StartServing(
 		router: mux.NewRouter(),
 	}
 
+	api.router.Use(corsMiddleware(config.API.CORSOrigins))
 	api.router.Use(middleware.LogRequest(metrics))
-	api.router.Use(middleware.InjectDatabases(postgres, redis, clickhouse))
+	api.router.Use(middleware.InjectDatabases(postgres, redis, clickhouse, nats))
 	api.router.Use(middleware.NewRateLimiter(100, 1*time.Minute, redis))
 
 	authenticator := middleware.NewAuthenticator(config.Twitch.ClientSecret, GenericResponse)
+	api.router.Use(authenticator.InjectAuthenticator())
+
 	api.authedRouter = api.router.PathPrefix("/").Subrouter()
+	api.authedRouter.Use(csrfMiddleware(config.API.CORSOrigins))
 	api.authedRouter.Use(authenticator.SetDynamicAuthMiddleware())
 
 	api.server = &http.Server{
@@ -76,7 +143,6 @@ func StartServing(
 		api.registerRoute(route)
 	}
 
-	// Catch-all for unmatched routes
 	api.router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		GenericResponse(w, http.StatusNotFound, map[string]string{"error": "Not Found"}, time.Now())
 	})
@@ -84,7 +150,6 @@ func StartServing(
 	return api.server.ListenAndServe()
 }
 
-// SetRoute adds a new route to the registry.
 func SetRoute(route Route) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
@@ -101,7 +166,6 @@ func (a *Server) registerRoute(route Route) {
 	a.router.HandleFunc(route.Path, route.Handler).Methods(route.Method)
 }
 
-// GenericResponse is a utility function to send a JSON response with a specified status code and duration.
 func GenericResponse(
 	writer http.ResponseWriter,
 	code int,

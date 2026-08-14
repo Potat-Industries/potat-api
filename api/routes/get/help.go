@@ -115,7 +115,18 @@ func getCommandsHandler(writer http.ResponseWriter, request *http.Request) {
 	}
 	writer.Header().Set("X-Cache-Hit", "MISS")
 
-	response, err := utils.BridgeRequest(
+	nats, ok := request.Context().Value(middleware.NatsKey).(*utils.NatsClient)
+	if !ok || nats == nil {
+		logger.Error.Println("NATS client not found in context")
+		api.GenericResponse(writer, http.StatusServiceUnavailable, HelpResponse{
+			Data:   &[]common.Command{},
+			Errors: &[]common.ErrorMessage{{Message: "Service unavailable"}},
+		}, start)
+
+		return
+	}
+
+	response, err := nats.BridgeRequest(
 		commandBridgeTimeout,
 		"get-commands",
 	)

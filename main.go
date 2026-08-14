@@ -15,8 +15,11 @@ import (
 	"time"
 
 	"github.com/Potat-Industries/potat-api/api"
+	_ "github.com/Potat-Industries/potat-api/api/routes/del"
 	_ "github.com/Potat-Industries/potat-api/api/routes/get"
+	_ "github.com/Potat-Industries/potat-api/api/routes/patch"
 	_ "github.com/Potat-Industries/potat-api/api/routes/post"
+	_ "github.com/Potat-Industries/potat-api/api/routes/put"
 	"github.com/Potat-Industries/potat-api/common"
 	"github.com/Potat-Industries/potat-api/common/db"
 	"github.com/Potat-Industries/potat-api/common/logger"
@@ -107,7 +110,7 @@ func main() { //nolint:cyclop
 	apiChan := make(chan error)
 	if config.API.Enabled {
 		go func() {
-			apiChan <- api.StartServing(*config, postgres, redis, clickhouse, metrics)
+			apiChan <- api.StartServing(*config, postgres, redis, clickhouse, nats, metrics)
 		}()
 	}
 
@@ -220,8 +223,9 @@ func initClickhouse(ctx context.Context, config common.Config) *db.ClickhouseCli
 func initNats(ctx context.Context) *utils.NatsClient {
 	nats, err := utils.CreateNatsBroker(ctx)
 	if err != nil {
-		logger.Error.Panicf("Failed to connect to RabbitMQ: %v", err)
+		logger.Error.Panicf("Failed to connect to NATS: %v", err)
 	}
+	logger.Info.Println("NATS initialized")
 
 	return nats
 }
